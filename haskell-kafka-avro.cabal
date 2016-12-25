@@ -1,0 +1,91 @@
+name:                haskell-kafka-avro
+version:             0.1.0.0
+synopsis:            Avro support for Kafka infrastructure
+description:         Please see README.md
+homepage:            https://github.com/haskellworks/haskell-kafka-avro#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Alexey Raga
+maintainer:          alexey.raga@gmail.com
+copyright:           Alexey Raga
+category:            Services
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Data.Avro.SchemaRegistry
+  build-depends:       aeson,
+                       avro,
+                       base >= 4.7 && < 5,
+                       binary,
+                       bytestring,
+                       cache,
+                       containers,
+                       hashable,
+                       http-client,
+                       mtl,
+                       pure-zlib >= 0.6,
+                       semigroups,
+                       servant,
+                       servant-client,
+                       text,
+                       transformers,
+                       unordered-containers
+  default-language:    Haskell2010
+
+executable haskell-kafka-avro-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       aeson
+                     , avro
+                     , base
+                     , binary
+                     , bytestring
+                     , cache
+                     , containers
+                     , hashable
+                     , haskell-kafka-avro
+                     , http-client
+                     , mtl
+                     , pure-zlib >= 0.6
+                     , semigroups
+                     , servant
+                     , servant-client
+                     , text
+                     , transformers
+                     , unordered-containers
+  default-language:    Haskell2010
+
+test-suite haskell-kafka-avro-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       QuickCheck
+                     , aeson
+                     , avro
+                     , base
+                     , binary
+                     , bytestring
+                     , cache
+                     , containers
+                     , hashable
+                     , haskell-kafka-avro
+                     , hspec
+                     , http-client
+                     , mtl
+                     , pure-zlib >= 0.6
+                     , semigroups
+                     , servant
+                     , servant-client
+                     , text
+                     , transformers
+                     , unordered-containers
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/haskellworks/haskell-kafka-avro

@@ -1,0 +1,38 @@
+version: '2'
+services:
+
+  # Zookeeper required for ResourceManager automatic failover
+  zookeeper:
+    image: jplock/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: arbornetworks-docker-docker.bintray.io/kafka_2.0.1
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    links:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_HOST_NAME: "$DOCKER_IP"
+      KAFKA_ADVERTISED_PORT: "9092"
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_HEAP_OPTS: '-Xmx3G -Xms3G'
+    depends_on:
+      - zookeeper
+
+  schema-registry:
+    image: arbornetworks-docker-docker.bintray.io/schema-registry_2.0.1
+    hostname: schema-registry
+    ports:
+      - 8081:8081
+    links:
+      - zookeeper:zookeeper
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
+      SERVICE_NAME: schema-registry
+    depends_on:
+      - zookeeper
+      - kafka
