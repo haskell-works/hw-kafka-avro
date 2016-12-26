@@ -4,7 +4,7 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-module Data.Avro.SchemaRegistry
+module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema
 , SchemaId(..)
 , SchemaRegistry, SchemaRegistryError(..)

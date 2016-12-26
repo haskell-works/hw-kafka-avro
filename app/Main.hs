@@ -1,6 +1,6 @@
 module Main where
 
-import Data.Avro.SchemaRegistry
+import Kafka.Avro.SchemaRegistry
 
 main :: IO ()
 main = do
