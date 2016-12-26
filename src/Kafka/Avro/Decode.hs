@@ -1,23 +1,30 @@
 module Kafka.Avro.Decode
 (
-  decodeWithSchema
+  DecodeError(..)
+, decodeWithSchema
 ) where
 
 import           Control.Monad.IO.Class
 import           Data.Avro as A
+import           Data.Avro.Schema (Schema)
 import           Data.Bits (shiftL)
 import           Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
 
-decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> m (Either String a)
+data DecodeError = RegistryError SchemaRegistryError
+                 | BadPayloadNoSchemaId
+                 | DecodeError Schema String
+                 deriving (Show)
+
+decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> m (Either DecodeError a)
 decodeWithSchema sr bs = case extractSchemaId bs of
-  Nothing       -> return $ Left "Unable to determine schema ID"
+  Nothing       -> return $ Left BadPayloadNoSchemaId
   Just (n, bs') -> do
     s <- loadSchema sr n
     return $ case s of
-      Left err -> Left ("Unable to load schema: " ++ show err)
-      Right sc -> resultToEither $ A.decode sc bs'
+      Left err -> Left $ RegistryError err
+      Right sc -> resultToEither sc (A.decode sc bs')
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do
@@ -28,6 +35,7 @@ extractSchemaId bs = do
   let int  =  sum $ fromIntegral <$> zipWith shiftL [w4, w3, w2, w1] [0, 8, 16, 24]
   return (SchemaId int, b4)
 
-resultToEither :: A.Result a -> Either String a
-resultToEither (Success a) = Right a
-resultToEither (Error s) = Left s
+resultToEither :: Schema -> A.Result a -> Either DecodeError a
+resultToEither sc res = case res of
+  Success a -> Right a
+  Error err -> Left $ DecodeError sc err

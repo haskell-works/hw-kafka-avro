@@ -31,9 +31,9 @@ newtype SchemaResponse = SchemaResponse Schema deriving (Generic, Show)
 
 data SchemaRegistry = SchemaRegistry (Cache SchemaId Schema) Manager BaseUrl
 
-data SchemaRegistryError = ConnectError SomeException
-                         | DecodeError SchemaId String
-                         | ResponseError SchemaId
+data SchemaRegistryError = SchemaRegistryConnectError SomeException
+                         | SchemaDecodeError SchemaId String
+                         | SchemaRegistryResponseError SchemaId
                          | SchemaRegistryError SchemaId
                          deriving (Show)
 
@@ -65,9 +65,9 @@ apiLoadSchema = client api
 
 convertError :: SchemaId -> ServantError -> SchemaRegistryError
 convertError sid err = case err of
-  ConnectionError ex   -> ConnectError ex
-  FailureResponse{}    -> ResponseError sid
-  DecodeFailure de _ _ -> DecodeError sid de
+  ConnectionError ex   -> SchemaRegistryConnectError ex
+  FailureResponse{}    -> SchemaRegistryResponseError sid
+  DecodeFailure de _ _ -> SchemaDecodeError sid de
   _                    -> SchemaRegistryError sid
 
 unwrapResponse :: SchemaResponse -> Schema
