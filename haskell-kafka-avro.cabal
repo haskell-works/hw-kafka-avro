@@ -2,7 +2,7 @@ name:                haskell-kafka-avro
 version:             0.1.0.0
 synopsis:            Avro support for Kafka infrastructure
 description:         Please see README.md
-homepage:            https://github.com/haskellworks/haskell-kafka-avro#readme
+homepage:            https://github.com/alexeyraga/haskell-kafka-avro#readme
 license:             BSD3
 license-file:        LICENSE
 author:              Alexey Raga
@@ -92,4 +92,4 @@ test-suite haskell-kafka-avro-test
 
 source-repository head
   type:     git
-  location: https://github.com/haskellworks/haskell-kafka-avro
+  location: https://github.com/alexeyraga/haskell-kafka-avro
