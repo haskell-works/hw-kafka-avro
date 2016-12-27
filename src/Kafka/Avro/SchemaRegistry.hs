@@ -84,4 +84,4 @@ instance FromJSON SchemaResponse where
   parseJSON _ = mempty
 
 liftExceptT :: MonadIO m => ExceptT l IO r -> ExceptT l m r
-liftExceptT e = ExceptT $ liftIO (runExceptT e)
+liftExceptT = ExceptT . liftIO . runExceptT
