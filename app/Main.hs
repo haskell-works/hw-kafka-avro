@@ -28,7 +28,7 @@ main = do
   showDedupInfo res
 
 bsWithSchemaId :: BL.ByteString
-bsWithSchemaId = BL.pack [0,0,0,2,65,66,67,68,69]
+bsWithSchemaId = BL.pack [0,0,0,0,2,65,66,67,68,69]
 
 showDedupInfo :: Either DecodeError DedupInfo -> IO ()
 showDedupInfo = print . show

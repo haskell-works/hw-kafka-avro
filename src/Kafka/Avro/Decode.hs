@@ -27,7 +27,8 @@ decodeWithSchema sr bs = do
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do
-  (w1, b1) <- BL.uncons bs
+  (_ , b0) <- BL.uncons bs
+  (w1, b1) <- BL.uncons b0
   (w2, b2) <- BL.uncons b1
   (w3, b3) <- BL.uncons b2
   (w4, b4) <- BL.uncons b3
