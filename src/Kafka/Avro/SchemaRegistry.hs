@@ -10,9 +10,8 @@ module Kafka.Avro.SchemaRegistry
 , SchemaRegistry, SchemaRegistryError(..)
 ) where
 
-import           Control.Arrow (left, right)
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad.Trans.Except (runExceptT, withExceptT, ExceptT(..))
 import           Data.Aeson
 import           Data.Avro.Schema (Schema)
 import           Data.Cache as C
@@ -44,13 +43,14 @@ schemaRegistry url = liftIO $
   <*> newManager defaultManagerSettings
   <*> parseBaseUrl url
 
-loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Either SchemaRegistryError Schema)
-loadSchema (SchemaRegistry c m u) sid = liftIO $
-   C.lookup c sid >>= \sc -> case sc of
-    Just s  -> return $ Right s
+loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> ExceptT SchemaRegistryError m Schema
+loadSchema (SchemaRegistry c m u) sid = do
+  sc <- liftIO $ C.lookup c sid
+  case sc of
+    Just s  -> return s
     Nothing -> do
-       res <- loadSchema' m u sid
-       _   <- sequence $ C.insert c sid <$> res
+       res <- loadSchemaFromSR m u sid
+       _   <- liftIO $ C.insert c sid res
        return res
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
@@ -63,19 +63,16 @@ api = Proxy
 apiLoadSchema :: Int -> Manager -> BaseUrl -> ClientM SchemaResponse
 apiLoadSchema = client api
 
-convertError :: SchemaId -> ServantError -> SchemaRegistryError
-convertError sid err = case err of
-  ConnectionError ex   -> SchemaRegistryConnectError ex
-  FailureResponse{}    -> SchemaRegistryResponseError sid
-  DecodeFailure de _ _ -> SchemaDecodeError sid de
-  _                    -> SchemaRegistryError sid
-
-unwrapResponse :: SchemaResponse -> Schema
-unwrapResponse (SchemaResponse s) = s
-
-loadSchema' :: Manager -> BaseUrl -> SchemaId -> IO (Either SchemaRegistryError Schema)
-loadSchema' m u sid@(SchemaId i) =
-  right unwrapResponse . left (convertError sid) <$> runExceptT (apiLoadSchema i m u)
+loadSchemaFromSR :: MonadIO m => Manager -> BaseUrl -> SchemaId -> ExceptT SchemaRegistryError m Schema
+loadSchemaFromSR m u sid@(SchemaId i) =
+  withExceptT convertError $ unwrapResponse <$> liftExceptT (apiLoadSchema i m u)
+  where
+    unwrapResponse (SchemaResponse s) = s
+    convertError msg = case msg of
+      ConnectionError ex   -> SchemaRegistryConnectError ex
+      FailureResponse{}    -> SchemaRegistryResponseError sid
+      DecodeFailure de _ _ -> SchemaDecodeError sid de
+      _                    -> SchemaRegistryError sid
 
 instance FromJSON SchemaResponse where
   parseJSON (Object v) =
@@ -85,3 +82,6 @@ instance FromJSON SchemaResponse where
     ) (Object v)
 
   parseJSON _ = mempty
+
+liftExceptT :: MonadIO m => ExceptT l IO r -> ExceptT l m r
+liftExceptT e = ExceptT $ liftIO (runExceptT e)

@@ -4,8 +4,10 @@ module Kafka.Avro.Decode
 , decodeWithSchema
 ) where
 
-import           Control.Monad.IO.Class
-import           Data.Avro as A
+import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Except (withExceptT, ExceptT(..))
+import           Control.Error.Util ((??), hoistEither)
+import           Data.Avro as A (FromAvro, Result(..), decode)
 import           Data.Avro.Schema (Schema)
 import           Data.Bits (shiftL)
 import           Data.ByteString.Lazy (ByteString)
@@ -17,14 +19,11 @@ data DecodeError = RegistryError SchemaRegistryError
                  | DecodeError Schema String
                  deriving (Show)
 
-decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> m (Either DecodeError a)
-decodeWithSchema sr bs = case extractSchemaId bs of
-  Nothing       -> return $ Left BadPayloadNoSchemaId
-  Just (n, bs') -> do
-    s <- loadSchema sr n
-    return $ case s of
-      Left err -> Left $ RegistryError err
-      Right sc -> resultToEither sc (A.decode sc bs')
+decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> ExceptT DecodeError m a
+decodeWithSchema sr bs = do
+  (n, bs') <- extractSchemaId bs ?? BadPayloadNoSchemaId
+  s        <- withExceptT RegistryError (loadSchema sr n)
+  hoistEither $ resultToEither s (A.decode s bs')
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do
@@ -38,4 +37,4 @@ extractSchemaId bs = do
 resultToEither :: Schema -> A.Result a -> Either DecodeError a
 resultToEither sc res = case res of
   Success a -> Right a
-  Error err -> Left $ DecodeError sc err
+  Error msg -> Left $ DecodeError sc msg

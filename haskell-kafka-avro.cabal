@@ -24,6 +24,7 @@ library
                        bytestring,
                        cache,
                        containers,
+                       errors,
                        hashable,
                        http-client,
                        mtl,
@@ -47,6 +48,7 @@ executable haskell-kafka-avro-exe
                      , bytestring
                      , cache
                      , containers
+                     , errors
                      , hashable
                      , haskell-kafka-avro
                      , http-client
@@ -72,6 +74,7 @@ test-suite haskell-kafka-avro-test
                      , bytestring
                      , cache
                      , containers
+                     , errors
                      , hashable
                      , haskell-kafka-avro
                      , hspec
