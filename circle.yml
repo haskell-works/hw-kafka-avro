@@ -15,10 +15,7 @@ dependencies:
   override:
     - stack setup
     - stack clean
-    - LD_LIBRARY_PATH=/usr/local/lib stack build --test --no-run-tests --haddock --no-haddock-deps
-
-  post:
-    - ./scripts/copy-docs.sh
+    - LD_LIBRARY_PATH=/usr/local/lib stack build --test --no-run-tests
 
 test:
   override:
