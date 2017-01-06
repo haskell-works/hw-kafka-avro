@@ -10,14 +10,9 @@ dependencies:
 
   pre:
     - wget -qO- https://get.haskellstack.org/ | sh
-    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 10
-    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 10
-    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 20
-    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 20
     - "git fetch --unshallow || true"
 
   override:
-    - build/build-librdkafka.sh
     - stack setup
     - stack clean
     - LD_LIBRARY_PATH=/usr/local/lib stack build --test --no-run-tests --haddock --no-haddock-deps
