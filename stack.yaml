@@ -38,7 +38,7 @@ resolver: lts-7.13
 packages:
 - '.'
 - location:
-    git: git@github.com:AlexeyRaga/avro.git
+    git: git@github.com:haskell-works/haskell-avro.git
     commit: 510af592fc7d0040e6ac8ae99fd4703ebbba3814
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
