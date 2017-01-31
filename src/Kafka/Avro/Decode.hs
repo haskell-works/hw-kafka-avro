@@ -19,11 +19,16 @@ data DecodeError = RegistryError SchemaRegistryError
                  | DecodeError Schema String
                  deriving (Show)
 
-decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> ExceptT DecodeError m a
-decodeWithSchema sr bs = do
-  (n, bs') <- extractSchemaId bs ?? BadPayloadNoSchemaId
-  s        <- withExceptT RegistryError (loadSchema sr n)
-  hoistEither $ resultToEither s (A.decode s bs')
+decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> m (Either DecodeError a)
+decodeWithSchema sr bs =
+  case schemaData of
+    Left err -> return $ Left err
+    Right (sid, payload) -> do
+      res <- leftMap RegistryError <$> loadSchema sr sid
+      return $ res >>= decode payload
+  where
+    schemaData = maybe (Left BadPayloadNoSchemaId) Right (extractSchemaId bs)
+    decode p s = resultToEither s (A.decode s p)
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do
@@ -34,6 +39,10 @@ extractSchemaId bs = do
   (w4, b4) <- BL.uncons b3
   let int  =  sum $ fromIntegral <$> zipWith shiftL [w4, w3, w2, w1] [0, 8, 16, 24]
   return (SchemaId int, b4)
+
+leftMap :: (e -> e') -> Either e r -> Either e' r
+leftMap _ (Right r) = Right r
+leftMap f (Left e) = Left (f e)
 
 resultToEither :: Schema -> A.Result a -> Either DecodeError a
 resultToEither sc res = case res of

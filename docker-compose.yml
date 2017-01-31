@@ -1,30 +1,30 @@
 version: '2'
 services:
 
-  # Zookeeper required for ResourceManager automatic failover
   zookeeper:
-    image: jplock/zookeeper
+    image: confluentinc/cp-zookeeper
+    hostname: zookeeper
     ports:
-      - "2181:2181"
+      - 2182:2181
+    environment:
+      SERVICE_NAME: zookeeper
+      ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
-    image: arbornetworks-docker-docker.bintray.io/kafka_2.0.1
+    image: confluentinc/cp-kafka
     hostname: kafka
     ports:
-      - "9092:9092"
+      - 9092:9092
     links:
-      - zookeeper
+      - zookeeper:zookeeper
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_ADVERTISED_HOST_NAME: "$DOCKER_IP"
-      KAFKA_ADVERTISED_PORT: "9092"
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
-      KAFKA_HEAP_OPTS: '-Xmx3G -Xms3G'
-    depends_on:
-      - zookeeper
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://$DOCKER_IP:9092"
+      KAFKA_CREATE_TOPICS:
+
 
   schema-registry:
-    image: arbornetworks-docker-docker.bintray.io/schema-registry_2.0.1
+    image: confluentinc/cp-schema-registry
     hostname: schema-registry
     ports:
       - 8081:8081
@@ -32,7 +32,7 @@ services:
       - zookeeper:zookeeper
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
-      SERVICE_NAME: schema-registry
+      SCHEMA_REGISTRY_HOST_NAME: schema_registry
     depends_on:
       - zookeeper
       - kafka

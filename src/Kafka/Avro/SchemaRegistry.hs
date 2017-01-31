@@ -43,14 +43,14 @@ schemaRegistry url = liftIO $
   <*> newManager defaultManagerSettings
   <*> parseBaseUrl url
 
-loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> ExceptT SchemaRegistryError m Schema
+loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchema (SchemaRegistry c m u) sid = do
   sc <- liftIO $ C.lookup c sid
   case sc of
-    Just s  -> return s
+    Just s  -> return (Right s)
     Nothing -> do
        res <- loadSchemaFromSR m u sid
-       _   <- liftIO $ C.insert c sid res
+       _   <- traverse (liftIO . C.insert c sid) res
        return res
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
@@ -63,9 +63,9 @@ api = Proxy
 apiLoadSchema :: Int -> Manager -> BaseUrl -> ClientM SchemaResponse
 apiLoadSchema = client api
 
-loadSchemaFromSR :: MonadIO m => Manager -> BaseUrl -> SchemaId -> ExceptT SchemaRegistryError m Schema
+loadSchemaFromSR :: MonadIO m => Manager -> BaseUrl -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchemaFromSR m u sid@(SchemaId i) =
-  withExceptT convertError $ unwrapResponse <$> liftExceptT (apiLoadSchema i m u)
+  liftExceptT (withExceptT convertError $ unwrapResponse <$> apiLoadSchema i m u)
   where
     unwrapResponse (SchemaResponse s) = s
     convertError msg = case msg of
@@ -83,5 +83,5 @@ instance FromJSON SchemaResponse where
 
   parseJSON _ = mempty
 
-liftExceptT :: MonadIO m => ExceptT l IO r -> ExceptT l m r
-liftExceptT = ExceptT . liftIO . runExceptT
+liftExceptT :: MonadIO m => ExceptT l IO r -> m (Either l r)
+liftExceptT = liftIO . runExceptT
