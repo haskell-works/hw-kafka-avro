@@ -15,8 +15,11 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Kafka.Avro.SchemaRegistry,
-                       Kafka.Avro.Decode
+  exposed-modules:     Kafka.Avro,
+                       Kafka.Avro.Decode,
+                       Kafka.Avro.Encode,
+                       Kafka.Avro.SchemaRegistry
+
   build-depends:       aeson,
                        avro,
                        base >= 4.7 && < 5,
