@@ -5,8 +5,6 @@ module Kafka.Avro.Decode
 ) where
 
 import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Except (withExceptT, ExceptT(..))
-import           Control.Error.Util ((??), hoistEither)
 import           Data.Avro as A (FromAvro, Result(..), decode)
 import           Data.Avro.Schema (Schema)
 import           Data.Bits (shiftL)
