@@ -12,7 +12,7 @@ import           Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
 
-data DecodeError = RegistryError SchemaRegistryError
+data DecodeError = DecodeRegistryError SchemaRegistryError
                  | BadPayloadNoSchemaId
                  | DecodeError Schema String
                  deriving (Show)
@@ -22,7 +22,7 @@ decodeWithSchema sr bs =
   case schemaData of
     Left err -> return $ Left err
     Right (sid, payload) -> do
-      res <- leftMap RegistryError <$> loadSchema sr sid
+      res <- leftMap DecodeRegistryError <$> loadSchema sr sid
       return $ res >>= decode payload
   where
     schemaData = maybe (Left BadPayloadNoSchemaId) Right (extractSchemaId bs)
