@@ -74,6 +74,7 @@ sendSchema sr subj sc = do
     Nothing   -> do
       res <- sendSchemaToSR (srManager sr) (srBaseUrl sr) subj sc
       _   <- traverse (cacheId sr subj schemaName) res
+      _   <- traverse (\sid' -> cacheSchema sr sid' sc) res
       return res
   where
     schemaName = fullTypeName sc
