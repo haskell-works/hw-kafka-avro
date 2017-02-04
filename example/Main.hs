@@ -17,7 +17,7 @@ data DedupInfo = DedupInfo Int64 Text Bool Int64 deriving (Show, Eq, Ord)
 
 dedupSchema =
   let fld nm = Field nm [] Nothing Nothing
-   in Record "DedupInfo" Nothing [] Nothing Nothing
+   in Record "DedupInfo" (Just "hw.kafka.avro.test") [] Nothing Nothing
          [ fld "id" Long Nothing
          , fld "submitter_ip" String Nothing
          , fld "is_duplicate" Boolean Nothing
@@ -43,9 +43,10 @@ instance ToAvro DedupInfo where
 
 main :: IO ()
 main = do
-  print $ dedupSchema == dedupSchema 
   test
-  -- sr  <- schemaRegistry "http://localhost:8081"
+  sr   <- schemaRegistry "http://localhost:8081"
+  sent <- sendSchema sr (Subject "test-subject") dedupSchema
+  print sent
   -- res <- decodeWithSchema sr bsWithSchemaId
   -- showDedupInfo res
 

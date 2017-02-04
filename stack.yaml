@@ -39,7 +39,7 @@ packages:
 - '.'
 - location:
     git: git@github.com:haskell-works/haskell-avro.git
-    commit: 443541c35ea35d37165ff8355241cc0a9a80315b
+    commit: d9d1d545046512dfbae078445181dcb9b80d5e83
   extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
