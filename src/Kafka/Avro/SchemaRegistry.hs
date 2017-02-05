@@ -17,6 +17,7 @@ import           Control.Monad.Trans.Except (runExceptT, withExceptT, ExceptT(..
 import           Data.Aeson
 import           Data.Avro.Schema (Schema, Type(..), typeName)
 import           Data.Cache as C
+import           Data.Int
 import           Data.Hashable
 import           Data.Proxy
 import           Data.Text (Text, append, cons)
@@ -28,7 +29,7 @@ import           Network.HTTP.Client (Manager, newManager, defaultManagerSetting
 import           Servant.API
 import           Servant.Client
 
-newtype SchemaId = SchemaId Int deriving (Eq, Ord, Show, Hashable)
+newtype SchemaId = SchemaId Int32 deriving (Eq, Ord, Show, Hashable)
 newtype SchemaName = SchemaName Text deriving (Eq, Ord, Show, Hashable)
 
 newtype Subject = Subject Text deriving (Eq, Show, Generic, Hashable)
@@ -81,12 +82,12 @@ sendSchema sr subj sc = do
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
 
-type API = "schemas" :> "ids" :> Capture "id" Int :> Get '[JSON] RegisteredSchema
+type API = "schemas" :> "ids" :> Capture "id" Int32 :> Get '[JSON] RegisteredSchema
       :<|> "subjects" :> Capture "subject" Subject :> "versions" :> ReqBody '[JSON] RegisteredSchema :> Post '[JSON] SchemaId
 api :: Proxy API
 api = Proxy
 
-getSchemaById :: Int -> Manager -> BaseUrl -> ClientM RegisteredSchema
+getSchemaById :: Int32 -> Manager -> BaseUrl -> ClientM RegisteredSchema
 putSchema :: Subject -> RegisteredSchema -> Manager -> BaseUrl -> ClientM SchemaId
 getSchemaById :<|> putSchema = client api
 
