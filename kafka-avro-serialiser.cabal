@@ -43,6 +43,7 @@ library
 executable kafka-avro-serialiser-example
   hs-source-dirs:      example
   main-is:             Main.hs
+  other-modules:       Message
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       aeson
                      , avro

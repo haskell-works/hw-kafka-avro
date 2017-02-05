@@ -2,6 +2,7 @@
 module Kafka.Avro.Encode
 ( encodeKey, encodeValue
 , encodeWithSchema
+, EncodeError(..)
 ) where
 
 import           Control.Monad.IO.Class (MonadIO)
@@ -15,6 +16,7 @@ import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
 
 data EncodeError = EncodeRegistryError SchemaRegistryError
+  deriving (Show)
 
 -- | Encodes a provided value as a message key.
 --
