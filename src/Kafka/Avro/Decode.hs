@@ -17,7 +17,14 @@ data DecodeError = DecodeRegistryError SchemaRegistryError
                  | DecodeError Schema String
                  deriving (Show)
 
-decodeWithSchema :: (MonadIO m, FromAvro a) => SchemaRegistry -> ByteString -> m (Either DecodeError a)
+-- | Decodes a provided Avro-encoded value.
+-- The serialised value is expected to be in a "confluent-compatible" format
+-- where the "real" value bytestring is prepended with extra 5 bytes:
+-- a "magic" byte and 4 bytes representing the schema ID.
+decodeWithSchema :: (MonadIO m, FromAvro a)
+                 => SchemaRegistry
+                 -> ByteString
+                 -> m (Either DecodeError a)
 decodeWithSchema sr bs =
   case schemaData of
     Left err -> return $ Left err

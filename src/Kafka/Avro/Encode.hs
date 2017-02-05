@@ -16,6 +16,9 @@ import           Kafka.Avro.SchemaRegistry
 
 data EncodeError = EncodeRegistryError SchemaRegistryError
 
+-- | Encodes a provided value as a message key.
+--
+-- Registers the schema in SchemaRegistry with "<subject>-key" subject.
 encodeKey :: (MonadIO m, ToAvro a)
           => SchemaRegistry
           -> Subject
@@ -25,6 +28,9 @@ encodeKey sr (Subject subj) a =
   let keySubj = Subject (subj <> "-key")
    in encodeWithSchema sr keySubj a
 
+-- | Encodes a provided value as a message value.
+--
+-- Registers the schema in SchemaRegistry with "<subject>-value" subject.
 encodeValue :: (MonadIO m, ToAvro a)
             => SchemaRegistry
             -> Subject
@@ -34,6 +40,8 @@ encodeValue sr (Subject subj) a =
   let valSubj = Subject (subj <> "-value")
    in encodeWithSchema sr valSubj a
 
+-- | Encodes a provided value into Avro
+-- and registers value's schema in SchemaRegistry.
 encodeWithSchema :: (MonadIO m, ToAvro a)
                  => SchemaRegistry
                  -> Subject
