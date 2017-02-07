@@ -8,6 +8,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.Avro as A (FromAvro, Result(..), decode)
 import           Data.Avro.Schema (Schema)
 import           Data.Bits (shiftL)
+import           Data.Int
 import           Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
@@ -42,7 +43,8 @@ extractSchemaId bs = do
   (w2, b2) <- BL.uncons b1
   (w3, b3) <- BL.uncons b2
   (w4, b4) <- BL.uncons b3
-  let int  =  sum $ fromIntegral <$> zipWith shiftL [w4, w3, w2, w1] [0, 8, 16, 24]
+  let ints =  fromIntegral <$> [w4, w3, w2, w1] :: [Int32]
+  let int  =  sum $ zipWith shiftL ints [0, 8, 16, 24]
   return (SchemaId int, b4)
 
 leftMap :: (e -> e') -> Either e r -> Either e' r
