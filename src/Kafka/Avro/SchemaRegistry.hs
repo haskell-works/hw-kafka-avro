@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -39,8 +40,12 @@ newtype RegisteredSchema = RegisteredSchema Schema deriving (Generic, Show)
 data SchemaRegistry = SchemaRegistry
   { srCache         :: Cache SchemaId Schema
   , srReverseCache  :: Cache (Subject, SchemaName) SchemaId
+#if MIN_VERSION_servant(0,9,1)
+  , srClientEnv     :: ClientEnv
+#else
   , srManager       :: Manager
   , srBaseUrl       :: BaseUrl
+#endif
   }
 
 data SchemaRegistryError = SchemaRegistryConnectError SomeException
@@ -54,8 +59,12 @@ schemaRegistry url = liftIO $
   SchemaRegistry
   <$> newCache Nothing
   <*> newCache Nothing
+#if MIN_VERSION_servant(0,9,1)
+  <*> (ClientEnv <$> newManager defaultManagerSettings <*> parseBaseUrl url)
+#else
   <*> newManager defaultManagerSettings
   <*> parseBaseUrl url
+#endif
 
 loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchema sr sid = do
@@ -63,7 +72,11 @@ loadSchema sr sid = do
   case sc of
     Just s  -> return (Right s)
     Nothing -> do
+#if MIN_VERSION_servant(0,9,1)
+       res <- loadSchemaFromSR (srClientEnv sr) sid
+#else
        res <- loadSchemaFromSR (srManager sr) (srBaseUrl sr) sid
+#endif
        _   <- traverse (cacheSchema sr sid) res
        return res
 
@@ -73,7 +86,11 @@ sendSchema sr subj sc = do
   case sid of
     Just sid' -> return (Right sid')
     Nothing   -> do
+#if MIN_VERSION_servant(0,9,1)
+      res <- sendSchemaToSR (srClientEnv sr) subj sc
+#else
       res <- sendSchemaToSR (srManager sr) (srBaseUrl sr) subj sc
+#endif
       _   <- traverse (cacheId sr subj schemaName) res
       _   <- traverse (\sid' -> cacheSchema sr sid' sc) res
       return res
@@ -87,23 +104,41 @@ type API = "schemas" :> "ids" :> Capture "id" Int32 :> Get '[JSON] RegisteredSch
 api :: Proxy API
 api = Proxy
 
+#if MIN_VERSION_servant(0,9,1)
+--ExceptT ServantError IO SchemaId
+getSchemaById :: Int32 -> ClientM RegisteredSchema
+putSchema :: Subject -> RegisteredSchema -> ClientM SchemaId
+#else
 getSchemaById :: Int32 -> Manager -> BaseUrl -> ClientM RegisteredSchema
 putSchema :: Subject -> RegisteredSchema -> Manager -> BaseUrl -> ClientM SchemaId
+#endif
 getSchemaById :<|> putSchema = client api
 
 type P = ServantError
 
+#if MIN_VERSION_servant(0,9,1)
+sendSchemaToSR :: MonadIO m => ClientEnv -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
+sendSchemaToSR env subj s =
+  runExceptT $ withExceptT toSRError $ runServant env $ putSchema subj (RegisteredSchema s)
+#else
 sendSchemaToSR :: MonadIO m => Manager -> BaseUrl -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchemaToSR m u subj s =
   liftExceptT . withExceptT toSRError $ putSchema subj (RegisteredSchema s) m u
+#endif
   where
     toSRError msg = case msg of
       ConnectionError ex   -> SchemaRegistryConnectError ex
       DecodeFailure de _ _ -> undefined
 
+#if MIN_VERSION_servant(0,9,1)
+loadSchemaFromSR :: MonadIO m => ClientEnv -> SchemaId -> m (Either SchemaRegistryError Schema)
+loadSchemaFromSR env sid@(SchemaId i) =
+  runExceptT (withExceptT toSRError $ runServant env $ unwrapResponse <$> getSchemaById i)
+#else
 loadSchemaFromSR :: MonadIO m => Manager -> BaseUrl -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchemaFromSR m u sid@(SchemaId i) =
   liftExceptT (withExceptT toSRError $ unwrapResponse <$> getSchemaById i m u)
+#endif
   where
     unwrapResponse (RegisteredSchema s) = s
     toSRError msg = case msg of
@@ -155,5 +190,10 @@ instance FromJSON SchemaId where
 instance ToHttpApiData Subject where
   toUrlPiece (Subject s) = toUrlPiece s
 
+#if MIN_VERSION_servant(0,9,1)
+runServant :: MonadIO m => ClientEnv -> ClientM a -> ExceptT ServantError m a
+runServant env cli = ExceptT $ liftIO (runClientM cli env)
+#else
 liftExceptT :: MonadIO m => ExceptT l IO r -> m (Either l r)
 liftExceptT = liftIO . runExceptT
+#endif
