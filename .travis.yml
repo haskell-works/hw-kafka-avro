@@ -39,41 +39,41 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
 
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-6.yaml --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--stack-yaml stack-6.yaml"
     compiler: ": #stack 7.10.3"
     addons: {apt: {packages: [libgmp-dev]}}
 
-  - env: BUILD=stack ARGS="--resolver lts-7 --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver lts-7"
     compiler: ": #stack 8.0.1"
     addons: {apt: {packages: [libgmp-dev]}}
 
-  - env: BUILD=stack ARGS="--resolver lts-8 --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver lts-8"
     compiler: ": #stack 8.0.8"
     addons: {apt: {packages: [libgmp-dev]}}
 
   # Nightly builds are allowed to fail
-  - env: BUILD=stack ARGS="--resolver nightly --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver nightly"
     compiler: ": #stack nightly"
     addons: {apt: {packages: [libgmp-dev]}}
 
   # Build on macOS in addition to Linux
-  - env: BUILD=stack ARGS=" --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS=""
     compiler: ": #stack default osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--stack-yaml stack-6.yaml --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--stack-yaml stack-6.yaml"
     compiler: ": #stack 7.10.3 osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--resolver lts-7 --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver lts-7"
     compiler: ": #stack 8.0.1 osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--resolver lts-8 --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver lts-8"
     compiler: ": #stack 8.0.2 osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--resolver nightly --flag hw-kafka-avro:examples"
+  - env: BUILD=stack ARGS="--resolver nightly"
     compiler: ": #stack nightly osx"
     os: osx
 
@@ -118,7 +118,7 @@ install:
   set -ex
   case "$BUILD" in
     stack)
-      stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies
+      stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies --flag hw-kafka-avro:examples
       ;;
     cabal)
       cabal --version
@@ -137,7 +137,7 @@ script:
   set -ex
   case "$BUILD" in
     stack)
-      stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+      stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps --flag hw-kafka-avro:examples
       ;;
     cabal)
       cabal install --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
