@@ -4,18 +4,19 @@ module Kafka.Avro.Decode
 , decodeWithSchema
 ) where
 
-import           Control.Monad.IO.Class (MonadIO)
-import           Data.Avro as A (FromAvro, Result(..), decode)
-import           Data.Avro.Schema (Schema)
-import           Data.Bits (shiftL)
+import           Control.Monad.IO.Class    (MonadIO)
+import           Data.Avro                 as A (FromAvro, Result (..), decode)
+import           Data.Avro.Schema          (Schema)
+import           Data.Bits                 (shiftL)
+import           Data.ByteString.Lazy      (ByteString)
+import qualified Data.ByteString.Lazy      as BL hiding (zipWith)
 import           Data.Int
-import           Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
 
 data DecodeError = DecodeRegistryError SchemaRegistryError
                  | BadPayloadNoSchemaId
                  | DecodeError Schema String
+                 | InvalidSchema
                  deriving (Show)
 
 -- | Decodes a provided Avro-encoded value.
@@ -49,7 +50,7 @@ extractSchemaId bs = do
 
 leftMap :: (e -> e') -> Either e r -> Either e' r
 leftMap _ (Right r) = Right r
-leftMap f (Left e) = Left (f e)
+leftMap f (Left e)  = Left (f e)
 
 resultToEither :: Schema -> A.Result a -> Either DecodeError a
 resultToEither sc res = case res of
