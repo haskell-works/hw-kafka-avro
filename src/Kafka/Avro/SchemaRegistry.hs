@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeOperators              #-}
 
 module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
@@ -14,19 +14,19 @@ module Kafka.Avro.SchemaRegistry
 ) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except (runExceptT, withExceptT, ExceptT(..))
+import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, withExceptT)
 import           Data.Aeson
-import           Data.Avro.Schema (Schema, Type(..), typeName)
-import           Data.Cache as C
-import           Data.Int
+import           Data.Avro.Schema           (Schema, Type (..), typeName)
+import           Data.Cache                 as C
 import           Data.Hashable
+import           Data.Int
 import           Data.Proxy
-import           Data.Text (Text, append, cons)
-import qualified Data.Text.Encoding as Text
-import qualified Data.Text.Lazy.Encoding as LText
+import           Data.Text                  (Text, append, cons)
+import qualified Data.Text.Encoding         as Text
+import qualified Data.Text.Lazy.Encoding    as LText
 import           GHC.Exception
-import           GHC.Generics (Generic)
-import           Network.HTTP.Client (Manager, newManager, defaultManagerSettings)
+import           GHC.Generics               (Generic)
+import           Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
 import           Servant.API
 import           Servant.Client
 
@@ -38,13 +38,13 @@ newtype Subject = Subject Text deriving (Eq, Show, Generic, Hashable)
 newtype RegisteredSchema = RegisteredSchema Schema deriving (Generic, Show)
 
 data SchemaRegistry = SchemaRegistry
-  { srCache         :: Cache SchemaId Schema
-  , srReverseCache  :: Cache (Subject, SchemaName) SchemaId
+  { srCache        :: Cache SchemaId Schema
+  , srReverseCache :: Cache (Subject, SchemaName) SchemaId
 #if MIN_VERSION_servant(0,9,1)
-  , srClientEnv     :: ClientEnv
+  , srClientEnv    :: ClientEnv
 #else
-  , srManager       :: Manager
-  , srBaseUrl       :: BaseUrl
+  , srManager      :: Manager
+  , srBaseUrl      :: BaseUrl
 #endif
   }
 
@@ -52,6 +52,7 @@ data SchemaRegistryError = SchemaRegistryConnectError SomeException
                          | SchemaDecodeError SchemaId String
                          | SchemaRegistryLoadError SchemaId
                          | SchemaRegistryError SchemaId
+                         | SchemaRegistrySendError String
                          deriving (Show)
 
 schemaRegistry :: MonadIO m => String -> m SchemaRegistry
@@ -128,7 +129,8 @@ sendSchemaToSR m u subj s =
   where
     toSRError msg = case msg of
       ConnectionError ex   -> SchemaRegistryConnectError ex
-      DecodeFailure de _ _ -> undefined
+      DecodeFailure de _ _ -> SchemaRegistrySendError de
+      err                  -> SchemaRegistrySendError (show err)
 
 #if MIN_VERSION_servant(0,9,1)
 loadSchemaFromSR :: MonadIO m => ClientEnv -> SchemaId -> m (Either SchemaRegistryError Schema)
@@ -185,7 +187,7 @@ instance ToJSON RegisteredSchema where
 
 instance FromJSON SchemaId where
   parseJSON (Object v) = SchemaId <$> v .: "id"
-  parseJSON _ = mempty
+  parseJSON _          = mempty
 
 instance ToHttpApiData Subject where
   toUrlPiece (Subject s) = toUrlPiece s
