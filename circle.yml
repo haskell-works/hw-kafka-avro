@@ -1,25 +1,41 @@
-machine:
-  ghc:
-    version: 7.10.2
-  services:
-    - docker
+version: 2.0
+jobs:
+  build:
+    working_directory: ~/hw-kafka-avro
+    docker:
+      - image: fpco/stack-build:latest
 
-dependencies:
-  cache_directories:
-    - "~/.stack"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "hw-kafka-avro.cabal" }}
+            - dot-stack
+      - restore_cache:
+          key: stack-work-{{ checksum "stack.yaml" }}
 
-  pre:
-    - wget -qO- https://get.haskellstack.org/ | sh
-    - "git fetch --unshallow || true"
+      - run: stack setup
+      - run: stack build --test --no-run-tests --haddock --no-haddock-deps
 
-  override:
-    - stack setup
-    - stack clean
-    - LD_LIBRARY_PATH=/usr/local/lib stack build --test --no-run-tests
+      - run: ./scripts/copy-docs.sh
 
-test:
-  override:
-    - stack test
+      - run:
+          name: Running unit tests
+          command: stack test
 
-  post:
-    - find . -path "*/test-reports/*" -exec mv {} ${CIRCLE_TEST_REPORTS} \;
+      - save_cache:
+          key: dot-stack-base
+          paths:
+            - ~/.stack
+
+      - save_cache:
+          key: dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "hw-kafka-avro.cabal" }}
+          paths:
+            - ~/.stack
+
+      - save_cache:
+          key: stack-work-{{ checksum "stack.yaml" }}
+          paths: ~/hw-kafka-avro/.stack-work
+
+      - store_artifacts:
+          path: /tmp/doc
