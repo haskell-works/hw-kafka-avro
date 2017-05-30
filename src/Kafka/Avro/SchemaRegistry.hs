@@ -48,12 +48,12 @@ data SchemaRegistry = SchemaRegistry
 #endif
   }
 
-data SchemaRegistryError = SchemaRegistryConnectError SomeException
+data SchemaRegistryError = SchemaRegistryConnectError String
                          | SchemaDecodeError SchemaId String
                          | SchemaRegistryLoadError SchemaId
                          | SchemaRegistryError SchemaId
                          | SchemaRegistrySendError String
-                         deriving (Show)
+                         deriving (Show, Eq)
 
 schemaRegistry :: MonadIO m => String -> m SchemaRegistry
 schemaRegistry url = liftIO $
@@ -128,7 +128,7 @@ sendSchemaToSR m u subj s =
 #endif
   where
     toSRError msg = case msg of
-      ConnectionError ex   -> SchemaRegistryConnectError ex
+      ConnectionError ex   -> SchemaRegistryConnectError (show ex)
       DecodeFailure de _ _ -> SchemaRegistrySendError de
       err                  -> SchemaRegistrySendError (show err)
 
@@ -144,7 +144,7 @@ loadSchemaFromSR m u sid@(SchemaId i) =
   where
     unwrapResponse (RegisteredSchema s) = s
     toSRError msg = case msg of
-      ConnectionError ex   -> SchemaRegistryConnectError ex
+      ConnectionError ex   -> SchemaRegistryConnectError (show ex)
       FailureResponse{}    -> SchemaRegistryLoadError sid
       DecodeFailure de _ _ -> SchemaDecodeError sid de
       _                    -> SchemaRegistryLoadError sid

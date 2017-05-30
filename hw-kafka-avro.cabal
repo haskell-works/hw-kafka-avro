@@ -1,5 +1,5 @@
 name:                hw-kafka-avro
-version:             1.0.0
+version:             1.0.1
 synopsis:            Avro support for Kafka infrastructure
 description:         Please see README.md
 homepage:            https://github.com/haskell-works/hw-kafka-avro#readme

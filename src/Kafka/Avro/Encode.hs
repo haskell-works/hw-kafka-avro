@@ -5,18 +5,18 @@ module Kafka.Avro.Encode
 , EncodeError(..)
 ) where
 
-import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.IO.Class    (MonadIO)
+import           Data.Avro                 as A (ToAvro, encode, schemaOf)
+import           Data.Avro.Schema          (Schema)
+import qualified Data.Binary               as B
+import           Data.Bits                 (shiftL)
+import           Data.ByteString.Lazy      (ByteString)
+import qualified Data.ByteString.Lazy      as BL hiding (zipWith)
 import           Data.Monoid
-import           Data.Avro as A (ToAvro, schemaOf, encode)
-import           Data.Avro.Schema (Schema)
-import qualified Data.Binary as B
-import           Data.Bits (shiftL)
-import           Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as BL hiding (zipWith)
 import           Kafka.Avro.SchemaRegistry
 
 data EncodeError = EncodeRegistryError SchemaRegistryError
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- | Encodes a provided value as a message key.
 --
