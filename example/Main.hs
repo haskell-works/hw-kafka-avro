@@ -1,17 +1,18 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import           Control.Monad.Trans.Except
+import qualified Data.Aeson                 as J
+import qualified Data.Avro                  as A
+import           Data.Avro.Schema           as S
+import qualified Data.Avro.Types            as AT
 import           Data.Monoid
-import qualified Data.Aeson as J
-import           Data.Avro as A
-import           Data.Avro.Schema as S
-import qualified Data.Avro.Types as AT
 
-import           Data.Int
-import           Data.Text
-import           Kafka.Avro
-import           Message
+import Data.Int
+import Data.Text
+import Kafka.Avro
+import Message
 
 exampleMessage = TestMessage 1 "Example" True 12345678
 

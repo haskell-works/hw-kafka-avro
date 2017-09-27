@@ -5,10 +5,10 @@ module Message
 --
 
 import           Data.Avro
+import           Data.Avro.Schema
+import qualified Data.Avro.Types  as AT
 import           Data.Int
 import           Data.Text
-import           Data.Avro.Schema
-import qualified Data.Avro.Types as AT
 
 data TestMessage = TestMessage Int64 Text Bool Int64 deriving (Show, Eq, Ord)
 
@@ -20,6 +20,9 @@ testMessageSchema =
          , fld "is_active" Boolean Nothing
          , fld "timestamp" Long Nothing
          ]
+
+instance HasAvroSchema TestMessage where
+  schema = pure testMessageSchema
 
 instance FromAvro TestMessage where
   fromAvro (AT.Record _ r) =
@@ -37,4 +40,3 @@ instance ToAvro TestMessage where
       , "is_active" .= d
       , "timestamp" .= t
       ]
-  schema = pure testMessageSchema
