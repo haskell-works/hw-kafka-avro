@@ -5,7 +5,8 @@ module Kafka.Avro.Decode
 ) where
 
 import           Control.Monad.IO.Class    (MonadIO)
-import           Data.Avro                 as A (FromAvro, Result (..), decode)
+import           Data.Avro                 as A (FromAvro, Result (..))
+import qualified Data.Avro                 as A (decodeWithSchema)
 import           Data.Avro.Schema          (Schema)
 import           Data.Bits                 (shiftL)
 import           Data.ByteString.Lazy      (ByteString)
@@ -34,7 +35,7 @@ decodeWithSchema sr bs =
       return $ res >>= decode payload
   where
     schemaData = maybe (Left BadPayloadNoSchemaId) Right (extractSchemaId bs)
-    decode p s = resultToEither s (A.decode s p)
+    decode p s = resultToEither s (A.decodeWithSchema s p)
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do

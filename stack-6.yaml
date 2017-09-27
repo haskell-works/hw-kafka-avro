@@ -2,15 +2,12 @@ resolver: lts-8.3
 
 packages:
 - '.'
-- location:
-    git: https://github.com/haskell-works/hw-haskell-avro
-    commit: 7d2f2630b70b237e6bb33325b20fc7c391c52f56
-  extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
-  - pure-zlib-0.6
+  - avro-0.2.0.0
   - cache-0.1.0.0
+  - pure-zlib-0.6
 
 # Override default flag values for local packages and extra-deps
 flags: {}
