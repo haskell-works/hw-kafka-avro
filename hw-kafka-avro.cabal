@@ -1,5 +1,5 @@
 name:                hw-kafka-avro
-version:             1.2.0
+version:             1.3.0
 synopsis:            Avro support for Kafka infrastructure
 description:         Please see README.md
 homepage:            https://github.com/haskell-works/hw-kafka-avro#readme
@@ -35,6 +35,7 @@ library
                        errors,
                        hashable,
                        http-client,
+                       http-types,
                        mtl,
                        pure-zlib >= 0.6,
                        semigroups,

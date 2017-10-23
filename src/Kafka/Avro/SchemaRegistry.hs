@@ -27,6 +27,7 @@ import qualified Data.Text.Lazy.Encoding    as LText
 import           GHC.Exception
 import           GHC.Generics               (Generic)
 import           Network.HTTP.Client        (Manager, defaultManagerSettings, newManager)
+import           Network.HTTP.Types
 import           Servant.API
 import           Servant.Client
 
@@ -51,6 +52,7 @@ data SchemaRegistry = SchemaRegistry
 data SchemaRegistryError = SchemaRegistryConnectError String
                          | SchemaDecodeError SchemaId String
                          | SchemaRegistryLoadError SchemaId
+                         | SchemaRegistrySchemaNotFound SchemaId
                          | SchemaRegistryError SchemaId
                          | SchemaRegistrySendError String
                          deriving (Show, Eq)
@@ -115,8 +117,6 @@ putSchema :: Subject -> RegisteredSchema -> Manager -> BaseUrl -> ClientM Schema
 #endif
 getSchemaById :<|> putSchema = client api
 
-type P = ServantError
-
 #if MIN_VERSION_servant(0,9,1)
 sendSchemaToSR :: MonadIO m => ClientEnv -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchemaToSR env subj s =
@@ -144,10 +144,11 @@ loadSchemaFromSR m u sid@(SchemaId i) =
   where
     unwrapResponse (RegisteredSchema s) = s
     toSRError msg = case msg of
-      ConnectionError ex   -> SchemaRegistryConnectError (show ex)
-      FailureResponse{}    -> SchemaRegistryLoadError sid
-      DecodeFailure de _ _ -> SchemaDecodeError sid de
-      _                    -> SchemaRegistryLoadError sid
+      ConnectionError ex                                       -> SchemaRegistryConnectError (show ex)
+      FailureResponse {responseStatus=Status {statusCode=404}} -> SchemaRegistrySchemaNotFound sid
+      FailureResponse{}                                        -> SchemaRegistryLoadError sid
+      DecodeFailure de _ _                                     -> SchemaDecodeError sid de
+      _                                                        -> SchemaRegistryLoadError sid
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName

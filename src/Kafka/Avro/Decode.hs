@@ -1,7 +1,7 @@
 module Kafka.Avro.Decode
 (
   DecodeError(..)
-, decodeWithSchema
+, decodeWithSchema, extractSchemaId
 ) where
 
 import           Control.Monad.IO.Class    (MonadIO)
