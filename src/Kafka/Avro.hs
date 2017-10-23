@@ -34,4 +34,4 @@ propagateSchema sr subj bs = do
       case mSchema of
         Left (SchemaRegistrySchemaNotFound _) -> return $ Right Nothing
         Left err                              -> return $ Left err
-        Right schema                          -> fmap Just <$> sendSchema sr (keySubject subj) schema
+        Right schema                          -> fmap Just <$> sendSchema sr subj schema
