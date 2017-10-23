@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Kafka.Avro.Encode
 ( encodeKey, encodeValue
+, keySubject, valueSubject
 , encodeWithSchema
 , EncodeError(..)
 ) where
@@ -18,6 +19,12 @@ import           Kafka.Avro.SchemaRegistry
 data EncodeError = EncodeRegistryError SchemaRegistryError
   deriving (Show, Eq)
 
+keySubject :: Subject -> Subject
+keySubject (Subject subj) = Subject (subj <> "-key")
+
+valueSubject :: Subject -> Subject
+valueSubject (Subject subj) = Subject (subj <> "-value")
+
 -- | Encodes a provided value as a message key.
 --
 -- Registers the schema in SchemaRegistry with "<subject>-key" subject.
@@ -26,9 +33,7 @@ encodeKey :: (MonadIO m, ToAvro a)
           -> Subject
           -> a
           -> m (Either EncodeError ByteString)
-encodeKey sr (Subject subj) a =
-  let keySubj = Subject (subj <> "-key")
-   in encodeWithSchema sr keySubj a
+encodeKey sr subj = encodeWithSchema sr (keySubject subj)
 
 -- | Encodes a provided value as a message value.
 --
@@ -38,9 +43,7 @@ encodeValue :: (MonadIO m, ToAvro a)
             -> Subject
             -> a
             -> m (Either EncodeError ByteString)
-encodeValue sr (Subject subj) a =
-  let valSubj = Subject (subj <> "-value")
-   in encodeWithSchema sr valSubj a
+encodeValue sr subj = encodeWithSchema sr (valueSubject subj)
 
 -- | Encodes a provided value into Avro
 -- and registers value's schema in SchemaRegistry.
