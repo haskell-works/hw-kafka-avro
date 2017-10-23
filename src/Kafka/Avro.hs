@@ -19,7 +19,7 @@ propagateKeySchema sr subj = propagateSchema sr (keySubject subj)
 -- | Registers schema that was used for a given payload against the specified subject as a value schema.
 -- It is possible that a given payload doesn't have schema registered against it, in this case no prapagation happens.
 propagateValueSchema :: MonadIO m => SchemaRegistry -> Subject -> ByteString -> m (Either SchemaRegistryError (Maybe SchemaId))
-propagateValueSchema sr subj = propagateSchema sr (keySubject subj)
+propagateValueSchema sr subj = propagateSchema sr (valueSubject subj)
 
 propagateSchema :: MonadIO m
                 => SchemaRegistry
