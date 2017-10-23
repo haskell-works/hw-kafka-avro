@@ -28,7 +28,7 @@ propagateSchema :: MonadIO m
                 -> m (Either SchemaRegistryError (Maybe SchemaId))
 propagateSchema sr subj bs = do
   case extractSchemaId bs of
-    Nothing -> undefined
+    Nothing -> return $ Right Nothing
     Just (sid, _) -> do
       mSchema <- loadSchema sr sid
       case mSchema of
