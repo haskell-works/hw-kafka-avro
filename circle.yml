@@ -1,15 +1,15 @@
 version: 2.0
 jobs:
   build:
-    working_directory: ~/hw-kafka-avro
+    working_directory: ~/project
     docker:
-      - image: fpco/stack-build:latest
+      - image: quay.io/haskell_works/stack-build-cabal:2018-01-29
 
     steps:
       - checkout
       - restore_cache:
           keys:
-            - dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "hw-kafka-avro.cabal" }}
+            - dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
             - dot-stack
       - restore_cache:
           key: stack-work-{{ checksum "stack.yaml" }}
@@ -29,13 +29,13 @@ jobs:
             - ~/.stack
 
       - save_cache:
-          key: dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "hw-kafka-avro.cabal" }}
+          key: dot-stack-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
           paths:
             - ~/.stack
 
       - save_cache:
           key: stack-work-{{ checksum "stack.yaml" }}
-          paths: ~/hw-kafka-avro/.stack-work
+          paths: ~/project/.stack-work
 
       - store_artifacts:
           path: /tmp/doc
