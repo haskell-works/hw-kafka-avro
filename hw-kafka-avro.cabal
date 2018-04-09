@@ -41,6 +41,7 @@ library
                        semigroups,
                        servant,
                        servant-client,
+                       tagged,
                        text,
                        transformers,
                        unordered-containers
