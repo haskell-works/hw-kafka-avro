@@ -1,17 +1,22 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Kafka.Avro.Decode
 (
   DecodeError(..)
 , decodeWithSchema, extractSchemaId
 ) where
 
+import           Control.Arrow             (left)
 import           Control.Monad.IO.Class    (MonadIO)
-import           Data.Avro                 as A (FromAvro, Result (..))
+import           Data.Avro                 as A (FromAvro, HasAvroSchema (..), Result (..), fromAvro)
 import qualified Data.Avro                 as A (decodeWithSchema)
+import qualified Data.Avro.Decode          as A (decodeAvro)
+import qualified Data.Avro.Deconflict      as A (deconflict)
 import           Data.Avro.Schema          (Schema)
 import           Data.Bits                 (shiftL)
 import           Data.ByteString.Lazy      (ByteString)
 import qualified Data.ByteString.Lazy      as BL hiding (zipWith)
 import           Data.Int
+import           Data.Tagged               (Tagged, untag)
 import           Kafka.Avro.SchemaRegistry
 
 data DecodeError = DecodeRegistryError SchemaRegistryError
@@ -31,11 +36,18 @@ decodeWithSchema sr bs =
   case schemaData of
     Left err -> return $ Left err
     Right (sid, payload) -> do
-      res <- leftMap DecodeRegistryError <$> loadSchema sr sid
-      return $ res >>= decode payload
+      res <- left DecodeRegistryError <$> loadSchema sr sid
+      return $ res >>= flip decodeWithDeconflict payload
   where
     schemaData = maybe (Left BadPayloadNoSchemaId) Right (extractSchemaId bs)
-    decode p s = resultToEither s (A.decodeWithSchema s p)
+
+decodeWithDeconflict :: forall a. (FromAvro a) => Schema -> ByteString -> Either DecodeError a
+decodeWithDeconflict writerSchema bs =
+  let readerSchema = untag (schema :: Tagged a Schema)
+  in left (DecodeError readerSchema) $ do
+    raw <- A.decodeAvro writerSchema bs
+    val <- A.deconflict writerSchema readerSchema raw
+    resultToEither readerSchema (fromAvro val)
 
 extractSchemaId :: ByteString -> Maybe (SchemaId, ByteString)
 extractSchemaId bs = do
@@ -48,11 +60,9 @@ extractSchemaId bs = do
   let int  =  sum $ zipWith shiftL ints [0, 8, 16, 24]
   return (SchemaId int, b4)
 
-leftMap :: (e -> e') -> Either e r -> Either e' r
-leftMap _ (Right r) = Right r
-leftMap f (Left e)  = Left (f e)
-
-resultToEither :: Schema -> A.Result a -> Either DecodeError a
+resultToEither :: Schema -> A.Result a -> Either String a
 resultToEither sc res = case res of
   Success a -> Right a
-  Error msg -> Left $ DecodeError sc msg
+  Error msg -> Left msg
+
+
