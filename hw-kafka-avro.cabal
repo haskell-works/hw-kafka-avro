@@ -41,6 +41,7 @@ library
                        semigroups,
                        servant,
                        servant-client,
+                       servant-client-core,
                        tagged,
                        text,
                        transformers,
