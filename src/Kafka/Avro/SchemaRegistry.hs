@@ -21,7 +21,7 @@ import           Data.Cache                 as C
 import           Data.Hashable
 import           Data.Int
 import           Data.Proxy
-import           Data.Text                  (Text, append, cons)
+import           Data.Text                  (Text, append, cons, unpack)
 import qualified Data.Text.Encoding         as Text
 import qualified Data.Text.Lazy.Encoding    as LText
 import           GHC.Exception
@@ -30,6 +30,7 @@ import           Network.HTTP.Client        (Manager, defaultManagerSettings, ne
 import           Network.HTTP.Types
 import           Servant.API
 import           Servant.Client
+import           Servant.Client.Core
 
 newtype SchemaId = SchemaId Int32 deriving (Eq, Ord, Show, Hashable)
 newtype SchemaName = SchemaName Text deriving (Eq, Ord, Show, Hashable)
@@ -62,7 +63,9 @@ schemaRegistry url = liftIO $
   SchemaRegistry
   <$> newCache Nothing
   <*> newCache Nothing
-#if MIN_VERSION_servant(0,9,1)
+#if MIN_VERSION_servant(0,13,0)
+  <*> (ClientEnv <$> newManager defaultManagerSettings <*> parseBaseUrl url <*> pure Nothing)
+#elif MIN_VERSION_servant(0,9,1)
   <*> (ClientEnv <$> newManager defaultManagerSettings <*> parseBaseUrl url)
 #else
   <*> newManager defaultManagerSettings
@@ -128,9 +131,13 @@ sendSchemaToSR m u subj s =
 #endif
   where
     toSRError msg = case msg of
-      ConnectionError ex   -> SchemaRegistryConnectError (show ex)
-      DecodeFailure de _ _ -> SchemaRegistrySendError de
-      err                  -> SchemaRegistrySendError (show err)
+#if MIN_VERSION_servant(0,12,0)
+      DecodeFailure de _ -> SchemaRegistrySendError (unpack de)
+#else
+      DecodeFailure de _ _ -> SchemaRegistrySendError (unpack de)
+#endif
+      ConnectionError ex -> SchemaRegistryConnectError (show ex)
+      err                -> SchemaRegistrySendError (show err)
 
 #if MIN_VERSION_servant(0,9,1)
 loadSchemaFromSR :: MonadIO m => ClientEnv -> SchemaId -> m (Either SchemaRegistryError Schema)
@@ -144,11 +151,17 @@ loadSchemaFromSR m u sid@(SchemaId i) =
   where
     unwrapResponse (RegisteredSchema s) = s
     toSRError msg = case msg of
-      ConnectionError ex                                       -> SchemaRegistryConnectError (show ex)
-      FailureResponse {responseStatus=Status {statusCode=404}} -> SchemaRegistrySchemaNotFound sid
-      FailureResponse{}                                        -> SchemaRegistryLoadError sid
-      DecodeFailure de _ _                                     -> SchemaDecodeError sid de
-      _                                                        -> SchemaRegistryLoadError sid
+#if MIN_VERSION_servant(0,12,0)
+      FailureResponse (Response (Status 404 _) _ _ _) -> SchemaRegistrySchemaNotFound sid
+      FailureResponse _                               -> SchemaRegistryLoadError sid
+      DecodeFailure   de _                            -> SchemaDecodeError sid (unpack de)
+#else
+      FailureResponse { responseStatus = Status { statusCode = 404 } } -> SchemaRegistrySchemaNotFound sid
+      FailureResponse { }                                              -> SchemaRegistryLoadError sid
+      DecodeFailure   de _ _                                           -> SchemaDecodeError sid (unpack de)
+#endif
+      ConnectionError ex -> SchemaRegistryConnectError (show ex)
+      _                  -> SchemaRegistryLoadError sid
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName
