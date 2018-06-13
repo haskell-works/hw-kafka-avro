@@ -8,32 +8,32 @@ module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
 , SchemaId(..), Subject(..)
 , SchemaRegistry, SchemaRegistryError(..)
-, RegisteredSchema(..)
+, Schema(..)
 ) where
 
 import           Control.Arrow           (first)
 import           Control.Lens            (view, (^.))
 import           Control.Monad           (void)
-import           Control.Monad.IO.Class
+import           Control.Monad.IO.Class  (MonadIO, liftIO)
 import           Data.Aeson
 import           Data.Avro.Schema        (Schema, Type (..), typeName)
 import           Data.Bifunctor          (bimap)
 import           Data.Cache              as C
-import           Data.Hashable
-import           Data.Int
+import           Data.Hashable           (Hashable)
+import           Data.Int                (Int32)
+import           Data.String             (IsString)
 import           Data.Text               (Text, append, cons, unpack)
 import qualified Data.Text.Encoding      as Text
 import qualified Data.Text.Lazy.Encoding as LText
-import           GHC.Exception
+import           GHC.Exception           (SomeException, displayException, fromException)
 import           GHC.Generics            (Generic)
 import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager)
-import           Network.HTTP.Types
 import qualified Network.Wreq            as Wreq
 
-newtype SchemaId = SchemaId Int32 deriving (Eq, Ord, Show, Hashable)
-newtype SchemaName = SchemaName Text deriving (Eq, Ord, Show, Hashable)
+newtype SchemaId = SchemaId { unSchemaId :: Int32} deriving (Eq, Ord, Show, Hashable)
+newtype SchemaName = SchemaName Text deriving (Eq, Ord, IsString, Show, Hashable)
 
-newtype Subject = Subject Text deriving (Eq, Show, Generic, Hashable)
+newtype Subject = Subject { unSubject :: Text} deriving (Eq, Show, IsString, Ord, Generic, Hashable)
 
 newtype RegisteredSchema = RegisteredSchema { unRegisteredSchema :: Schema} deriving (Generic, Show)
 
@@ -62,7 +62,7 @@ loadSchema sr sid = do
   case sc of
     Just s  -> return (Right s)
     Nothing -> liftIO $ do
-      res <- getSchemaById' (srBaseUrl sr) sid
+      res <- getSchemaById (srBaseUrl sr) sid
       pure (unRegisteredSchema <$> res)
 
 sendSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
@@ -71,7 +71,7 @@ sendSchema sr subj sc = do
   case sid of
     Just sid' -> return (Right sid')
     Nothing   -> do
-      res <- liftIO $ putSchema' (srBaseUrl sr) subj (RegisteredSchema sc)
+      res <- liftIO $ putSchema (srBaseUrl sr) subj (RegisteredSchema sc)
       void $ traverse (cacheId sr subj schemaName) res
       void $ traverse (\sid' -> cacheSchema sr sid' sc) res
       pure res
@@ -80,8 +80,8 @@ sendSchema sr subj sc = do
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
 
-getSchemaById' :: String -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
-getSchemaById' baseUrl sid@(SchemaId i) = do
+getSchemaById :: String -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
+getSchemaById baseUrl sid@(SchemaId i) = do
   let schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
   resp <- Wreq.get schemaUrl
   pure $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
@@ -92,6 +92,17 @@ getSchemaById' baseUrl sid@(SchemaId i) = do
       Just httpErr -> fromHttpError httpErr $ \case
           StatusCodeException r _ | r ^. Wreq.responseStatus . Wreq.statusCode == 404 -> SchemaRegistrySchemaNotFound sid
           _                       -> SchemaRegistryLoadError sid
+
+putSchema :: String -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
+putSchema baseUrl (Subject sbj) schema = do
+  let schemaUrl = baseUrl ++ "/subject/" ++ unpack sbj ++ "/versions"
+  resp <- Wreq.post schemaUrl (toJSON schema)
+  pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
+  where
+    wrapError :: SomeException -> SchemaRegistryError
+    wrapError someErr = case fromException someErr of
+      Nothing      -> SchemaRegistrySendError (displayException someErr)
+      Just httpErr -> fromHttpError httpErr (\_ -> SchemaRegistrySendError (displayException someErr))
 
 fromHttpError :: HttpException -> (HttpExceptionContent -> SchemaRegistryError) -> SchemaRegistryError
 fromHttpError err f = case err of
@@ -104,17 +115,6 @@ fromHttpError err f = case err of
   HttpExceptionRequest _ (InvalidDestinationHost _) -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ TlsNotSupported            -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ err'                       -> f err'
-
-putSchema' :: String -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
-putSchema' baseUrl (Subject sbj) schema = do
-  let schemaUrl = baseUrl ++ "/subject/" ++ unpack sbj ++ "/versions"
-  resp <- Wreq.post schemaUrl (toJSON schema)
-  pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
-  where
-    wrapError :: SomeException -> SchemaRegistryError
-    wrapError someErr = case fromException someErr of
-      Nothing      -> SchemaRegistrySendError (displayException someErr)
-      Just httpErr -> fromHttpError httpErr (\_ -> SchemaRegistrySendError (displayException someErr))
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName
