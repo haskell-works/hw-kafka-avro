@@ -12,7 +12,7 @@ module Kafka.Avro.SchemaRegistry
 ) where
 
 import           Control.Arrow           (first)
-import           Control.Lens            (view, (^.))
+import           Control.Lens            (view, (&), (.~), (^.))
 import           Control.Monad           (void)
 import           Control.Monad.IO.Class  (MonadIO, liftIO)
 import           Data.Aeson
@@ -80,10 +80,15 @@ sendSchema sr subj sc = do
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
 
+wreqOpts :: Wreq.Options
+wreqOpts =
+  let accept = ["application/vnd.schemaregistry.v1+json", "application/vnd.schemaregistry+json", "application/json"]
+  in Wreq.defaults & Wreq.header "Accept" .~ accept
+
 getSchemaById :: String -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
 getSchemaById baseUrl sid@(SchemaId i) = do
   let schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
-  resp <- Wreq.get schemaUrl
+  resp <- Wreq.getWith wreqOpts schemaUrl
   pure $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
   where
     wrapError :: SomeException -> SchemaRegistryError
@@ -95,8 +100,8 @@ getSchemaById baseUrl sid@(SchemaId i) = do
 
 putSchema :: String -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
 putSchema baseUrl (Subject sbj) schema = do
-  let schemaUrl = baseUrl ++ "/subject/" ++ unpack sbj ++ "/versions"
-  resp <- Wreq.post schemaUrl (toJSON schema)
+  let schemaUrl = baseUrl ++ "/subjects/" ++ unpack sbj ++ "/versions"
+  resp <- Wreq.postWith wreqOpts schemaUrl (toJSON schema)
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
   where
     wrapError :: SomeException -> SchemaRegistryError

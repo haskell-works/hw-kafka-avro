@@ -1,4 +1,5 @@
-resolver: lts-10.10
+resolver: nightly
+allow-newer: true
 
 packages:
 - '.'
