@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e442bc6ecb172ea8efb783fc5347cf3ce958eda0767303228d49c435cf8d5100
+-- hash: b0f4e354a38dab39408fe0e2d96c0fd0801511d2eeaa57b6757c21b884f7315f
 
 name:           hw-kafka-avro
-version:        1.4.0
+version:        2.0.0
 synopsis:       Avro support for Kafka infrastructure
 description:    Please see README.md
 category:       Services
