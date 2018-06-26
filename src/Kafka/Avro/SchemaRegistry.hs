@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
@@ -116,9 +117,11 @@ fromHttpError err f = case err of
   HttpExceptionRequest _ ConnectionTimeout          -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ ProxyConnectException{}    -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ ConnectionClosed           -> SchemaRegistryConnectError (displayException err)
-  HttpExceptionRequest _ (InvalidProxySettings _)   -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ (InvalidDestinationHost _) -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ TlsNotSupported            -> SchemaRegistryConnectError (displayException err)
+#if MIN_VERSION_http_client(0,5,7)
+  HttpExceptionRequest _ (InvalidProxySettings _)   -> SchemaRegistryConnectError (displayException err)
+#endif
   HttpExceptionRequest _ err'                       -> f err'
 
 ---------------------------------------------------------------------
