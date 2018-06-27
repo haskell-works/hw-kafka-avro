@@ -1,5 +1,5 @@
 name: hw-kafka-avro
-version: '2.0.0'
+version: '2.1.0'
 synopsis: Avro support for Kafka infrastructure
 description: Please see README.md
 category: Services
@@ -33,7 +33,7 @@ library:
   - Kafka.Avro.Encode
   - Kafka.Avro.SchemaRegistry
   dependencies:
-  - avro >=0.2
+  - avro >=0.3
   - base >=4.7 && <5
   - wreq
   - lens
