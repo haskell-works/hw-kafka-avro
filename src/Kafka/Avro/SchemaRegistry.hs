@@ -7,6 +7,7 @@
 
 module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
+, loadSubjectSchema
 , getGlobalConfig, getSubjectConfig
 , getVersions, isCompatible
 , getSubjects
@@ -81,6 +82,32 @@ loadSchema sr sid = do
     Nothing -> liftIO $ do
       res <- getSchemaById (srBaseUrl sr) sid
       pure (unRegisteredSchema <$> res)
+
+loadSubjectSchema :: MonadIO m => SchemaRegistry -> Subject -> Version -> m (Either SchemaRegistryError Schema)
+loadSubjectSchema sr (Subject sbj) (Version version) = do
+    let url = (srBaseUrl sr) ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
+    resp    <- liftIO $ Wreq.getWith wreqOpts url
+    wrapped <- pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+
+    schema   <- getData "schema" wrapped
+    schemaId <- getData "id" wrapped
+
+    case (,) <$> schema <*> schemaId of
+      Left err -> return $ Left err
+      Right ((RegisteredSchema schema), schemaId) -> cacheSchema sr schemaId schema *> (return $ Right schema)
+  where
+    getData :: (MonadIO m, FromJSON a) => String -> Either e Value -> m (Either e a)
+    getData key = either (pure . Left) (viewData key)
+
+    viewData :: (MonadIO m, FromJSON a) => String -> Value -> m (Either e a)
+    viewData key value = liftIO $ either (throwIO . Wreq.JSONError)
+                                         (return . return)
+                                         (toData value)
+
+    toData :: FromJSON a => Value -> Either String a
+    toData value = case fromJSON value of
+                     Success a -> Right a
+                     Error e -> Left e
 
 sendSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchema sr subj sc = do
