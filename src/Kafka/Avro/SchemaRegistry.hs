@@ -27,17 +27,20 @@ import           Data.Aeson.Types        (typeMismatch)
 import           Data.Avro.Schema        (Schema, Type (..), typeName)
 import           Data.Bifunctor          (bimap)
 import           Data.Cache              as C
-import qualified Data.HashMap.Lazy       as HM
 import           Data.Hashable           (Hashable)
+import qualified Data.HashMap.Lazy       as HM
 import           Data.Int                (Int32)
 import           Data.String             (IsString)
 import           Data.Text               (Text, append, cons, unpack)
 import qualified Data.Text.Encoding      as Text
 import qualified Data.Text.Lazy.Encoding as LText
 import           Data.Word               (Word32)
-import           GHC.Exception           (SomeException, displayException, fromException)
+import           GHC.Exception           (SomeException, displayException,
+                                          fromException)
 import           GHC.Generics            (Generic)
-import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager)
+import           Network.HTTP.Client     (HttpException (..),
+                                          HttpExceptionContent (..), Manager,
+                                          defaultManagerSettings, newManager)
 import qualified Network.Wreq            as Wreq
 
 newtype SchemaId = SchemaId { unSchemaId :: Int32} deriving (Eq, Ord, Show, Hashable)
@@ -107,7 +110,7 @@ loadSubjectSchema sr (Subject sbj) (Version version) = do
     toData :: FromJSON a => Value -> Either String a
     toData value = case fromJSON value of
                      Success a -> Right a
-                     Error e -> Left e
+                     Error e   -> Left e
 
 sendSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchema sr subj sc = do
@@ -211,11 +214,7 @@ wrapError someErr = case fromException someErr of
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName
-fullTypeName r = SchemaName $ case r of
-  Record{} -> maybe (typeName r)
-                    (\ns -> ns `append` ('.' `cons` typeName r))
-                    (namespace r)
-  _        -> typeName r
+fullTypeName r = SchemaName $ typeName r
 
 cachedSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Maybe Schema)
 cachedSchema sr k = liftIO $ C.lookup (srCache sr) k

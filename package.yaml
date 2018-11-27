@@ -33,7 +33,7 @@ library:
   - Kafka.Avro.Encode
   - Kafka.Avro.SchemaRegistry
   dependencies:
-  - avro >=0.3
+  - avro >=0.4
   - base >=4.7 && <5
   - wreq
   - lens
