@@ -25,7 +25,7 @@ defaults: &defaults
         key: stack-work-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "package.yaml" }}
 
     - run: stack setup --resolver ${LTS} ${STACK_ARGS}
-    - run: stack build --test --no-run-tests --haddock --no-haddock-deps --resolver ${LTS} ${STACK_ARGS}
+    - run: stack build --test --no-run-tests --haddock --no-haddock-deps --resolver ${LTS} --flag hw-kafka-avro:examples ${STACK_ARGS}
 
     - save_cache:
         key: dot-stack-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
