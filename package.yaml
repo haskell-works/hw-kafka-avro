@@ -1,5 +1,5 @@
 name: hw-kafka-avro
-version: '2.1.0'
+version: '4.0.0'
 synopsis: Avro support for Kafka infrastructure
 description: Please see README.md
 category: Services
