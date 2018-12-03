@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f725a4e610fd945f6b308f38bb7741ff5db49869d28a7058343203118cc735a7
+-- hash: 197f828dd032958cc76e4a0254b3e3c569ddaca9328c6ac93075054ac2f8c548
 
 name:           hw-kafka-avro
 version:        2.1.0
@@ -42,7 +42,7 @@ library
       src
   build-depends:
       aeson
-    , avro >=0.3
+    , avro >=0.4
     , base >=4.7 && <5
     , binary
     , bytestring
