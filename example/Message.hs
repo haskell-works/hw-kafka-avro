@@ -14,7 +14,7 @@ data TestMessage = TestMessage Int64 Text Bool Int64 deriving (Show, Eq, Ord)
 
 testMessageSchema =
   let fld nm = Field nm [] Nothing Nothing
-   in Record "TestMessage" (Just "hw.kafka.avro.test") [] Nothing Nothing
+   in Record (TN "TestMessage" ["hw", "kafka", "avro", "test"]) [] Nothing Nothing
          [ fld "id" Long Nothing
          , fld "name" String Nothing
          , fld "is_active" Boolean Nothing
