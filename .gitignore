@@ -1,23 +1,62 @@
-dist
-dist-newstyle
+### OSX ###
+.DS_Store
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must ends with two \r.
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+### Haskell ###
+dist/
+dist-newstyle/
 cabal-dev
+.ghc.environment*
 *.o
 *.hi
 *.chi
 *.chs.h
-*.dyn_o
-*.dyn_hi
-.hpc
+.virthualenv
 .hsenv
 .cabal-sandbox/
 cabal.sandbox.config
-*.prof
+cabal.config
+cabal.project.local
+.stack-work/
 *.aux
+*.ps
 *.hp
+*.prof
 
-/*.submodules
-/.stack-work/
-/*.nix
-/*.nix.part
-/result
-corpus/
+### Emacs ###
+# -*- mode: gitignore; -*-
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Org-mode
+.org-id-locations
+*_archive
+
+# flymake-mode
+*_flymake.*
+
+# eshell files
+/eshell/history
+/eshell/lastdir
+
+# elpa packages
+/elpa/
+TAGS

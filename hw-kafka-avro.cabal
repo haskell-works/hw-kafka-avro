@@ -1,13 +1,15 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 30f52e81862851b4a683aac241a304455f46ec73f8d755304cd003bc7a6fb41b
+-- hash: fe0af003f86808ada42b661b2ca51a60e0c6d3e54b970a4666106a94abb9d8c5
 
 name:           hw-kafka-avro
 version:        4.0.0
 synopsis:       Avro support for Kafka infrastructure
-description:    Please see README.md
+description:    Avro support for Kafka infrastructure.
 category:       Services
 homepage:       https://github.com/haskell-works/hw-kafka-avro#readme
 bug-reports:    https://github.com/haskell-works/hw-kafka-avro/issues
@@ -17,7 +19,6 @@ copyright:      Alexey Raga
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
-cabal-version:  >= 1.10
 extra-source-files:
     README.md
 
@@ -36,10 +37,7 @@ library
       Kafka.Avro.Decode
       Kafka.Avro.Encode
       Kafka.Avro.SchemaRegistry
-  other-modules:
-      Paths_hw_kafka_avro
-  hs-source-dirs:
-      src
+  hs-source-dirs: src
   build-depends:
       aeson
     , avro >=0.4
@@ -67,9 +65,7 @@ executable kafka-avro-example
   main-is: Main.hs
   other-modules:
       Message
-      Paths_hw_kafka_avro
-  hs-source-dirs:
-      example
+  hs-source-dirs: example
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
@@ -97,9 +93,7 @@ test-suite kafka-avro-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_hw_kafka_avro
-  hs-source-dirs:
-      test
+  hs-source-dirs: test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck

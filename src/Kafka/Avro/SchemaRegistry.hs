@@ -35,12 +35,9 @@ import           Data.Text               (Text, append, cons, unpack)
 import qualified Data.Text.Encoding      as Text
 import qualified Data.Text.Lazy.Encoding as LText
 import           Data.Word               (Word32)
-import           GHC.Exception           (SomeException, displayException,
-                                          fromException)
+import           GHC.Exception           (SomeException, displayException, fromException)
 import           GHC.Generics            (Generic)
-import           Network.HTTP.Client     (HttpException (..),
-                                          HttpExceptionContent (..), Manager,
-                                          defaultManagerSettings, newManager)
+import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager)
 import qualified Network.Wreq            as Wreq
 
 newtype SchemaId = SchemaId { unSchemaId :: Int32} deriving (Eq, Ord, Show, Hashable)
@@ -96,7 +93,7 @@ loadSubjectSchema sr (Subject sbj) (Version version) = do
     schemaId <- getData "id" wrapped
 
     case (,) <$> schema <*> schemaId of
-      Left err -> return $ Left err
+      Left err                                    -> return $ Left err
       Right ((RegisteredSchema schema), schemaId) -> cacheSchema sr schemaId schema *> (return $ Right schema)
   where
     getData :: (MonadIO m, FromJSON a) => String -> Either e Value -> m (Either e a)
@@ -179,13 +176,6 @@ getSchemaById baseUrl sid@(SchemaId i) = do
   let schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
   resp <- Wreq.getWith wreqOpts schemaUrl
   pure $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
-  where
-    wrapError :: SomeException -> SchemaRegistryError
-    wrapError someErr = case fromException someErr of
-      Nothing      -> SchemaRegistryLoadError sid
-      Just httpErr -> fromHttpError httpErr $ \case
-          StatusCodeException r _ | r ^. Wreq.responseStatus . Wreq.statusCode == 404 -> SchemaRegistrySchemaNotFound sid
-          _                       -> SchemaRegistryLoadError sid
 
 putSchema :: String -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
 putSchema baseUrl (Subject sbj) schema = do
