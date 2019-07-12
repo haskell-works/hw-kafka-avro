@@ -1,13 +1,7 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
---
--- see: https://github.com/sol/hpack
---
--- hash: fe0af003f86808ada42b661b2ca51a60e0c6d3e54b970a4666106a94abb9d8c5
-
 name:           hw-kafka-avro
-version:        4.0.0
+version:        4.0.1
 synopsis:       Avro support for Kafka infrastructure
 description:    Avro support for Kafka infrastructure.
 category:       Services
