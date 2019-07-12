@@ -81,7 +81,7 @@ loadSchema sr sid = do
     Just s  -> return (Right s)
     Nothing -> liftIO $ do
       res <- getSchemaById (srBaseUrl sr) sid
-      pure (unRegisteredSchema <$> res)
+      traverse ((\schema -> schema <$ cacheSchema sr sid schema) . unRegisteredSchema) res
 
 loadSubjectSchema :: MonadIO m => SchemaRegistry -> Subject -> Version -> m (Either SchemaRegistryError Schema)
 loadSubjectSchema sr (Subject sbj) (Version version) = do
