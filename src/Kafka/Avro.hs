@@ -26,7 +26,7 @@ propagateSchema :: MonadIO m
                 -> Subject
                 -> ByteString
                 -> m (Either SchemaRegistryError (Maybe SchemaId))
-propagateSchema sr subj bs = do
+propagateSchema sr subj bs =
   case extractSchemaId bs of
     Nothing -> return $ Right Nothing
     Just (sid, _) -> do

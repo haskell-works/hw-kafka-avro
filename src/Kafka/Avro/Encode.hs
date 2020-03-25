@@ -1,14 +1,21 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Kafka.Avro.Encode
-( encodeKey, encodeValue
-, keySubject, valueSubject
+( EncodeError(..)
+, encodeKey
+, encodeValue
+, encode
+
+, encodeKeyWithSchema
+, encodeValueWithSchema
 , encodeWithSchema
-, EncodeError(..)
+
+, keySubject, valueSubject
 ) where
 
 import           Control.Monad.IO.Class    (MonadIO)
-import           Data.Avro                 as A (ToAvro, encode, schemaOf)
-import           Data.Avro.Schema          (Schema)
+import           Data.Avro                 (HasAvroSchema, Schema, ToAvro, schemaOf)
+import qualified Data.Avro                 as A
 import qualified Data.Binary               as B
 import           Data.Bits                 (shiftL)
 import           Data.ByteString.Lazy      (ByteString)
@@ -21,42 +28,79 @@ data EncodeError = EncodeRegistryError SchemaRegistryError
 
 keySubject :: Subject -> Subject
 keySubject (Subject subj) = Subject (subj <> "-key")
+{-# INLINE keySubject #-}
 
 valueSubject :: Subject -> Subject
 valueSubject (Subject subj) = Subject (subj <> "-value")
+{-# INLINE valueSubject #-}
 
 -- | Encodes a provided value as a message key.
 --
 -- Registers the schema in SchemaRegistry with "<subject>-key" subject.
-encodeKey :: (MonadIO m, ToAvro a)
-          => SchemaRegistry
-          -> Subject
-          -> a
-          -> m (Either EncodeError ByteString)
-encodeKey sr subj = encodeWithSchema sr (keySubject subj)
+encodeKey :: (MonadIO m, HasAvroSchema a, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> a
+  -> m (Either EncodeError ByteString)
+encodeKey sr subj = encode sr (keySubject subj)
+{-# INLINE encodeKey #-}
+
+-- | Encodes a provided value as a message key.
+--
+-- Registers the schema in SchemaRegistry with "<subject>-key" subject.
+encodeKeyWithSchema :: (MonadIO m, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> Schema
+  -> a
+  -> m (Either EncodeError ByteString)
+encodeKeyWithSchema sr subj = encodeWithSchema sr (keySubject subj)
+{-# INLINE encodeKeyWithSchema #-}
 
 -- | Encodes a provided value as a message value.
 --
 -- Registers the schema in SchemaRegistry with "<subject>-value" subject.
-encodeValue :: (MonadIO m, ToAvro a)
-            => SchemaRegistry
-            -> Subject
-            -> a
-            -> m (Either EncodeError ByteString)
-encodeValue sr subj = encodeWithSchema sr (valueSubject subj)
+encodeValue :: (MonadIO m, HasAvroSchema a, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> a
+  -> m (Either EncodeError ByteString)
+encodeValue sr subj = encode sr (valueSubject subj)
+{-# INLINE encodeValue #-}
+
+-- | Encodes a provided value as a message value.
+--
+-- Registers the schema in SchemaRegistry with "<subject>-value" subject.
+encodeValueWithSchema :: (MonadIO m, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> Schema
+  -> a
+  -> m (Either EncodeError ByteString)
+encodeValueWithSchema sr subj = encodeWithSchema sr (valueSubject subj)
+{-# INLINE encodeValueWithSchema #-}
+
+encode :: (MonadIO m, HasAvroSchema a, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> a
+  -> m (Either EncodeError ByteString)
+encode sr subj a = encodeWithSchema sr subj (schemaOf a) a
+{-# INLINE encode #-}
 
 -- | Encodes a provided value into Avro
 -- and registers value's schema in SchemaRegistry.
-encodeWithSchema :: (MonadIO m, ToAvro a)
-                 => SchemaRegistry
-                 -> Subject
-                 -> a
-                 -> m (Either EncodeError ByteString)
-encodeWithSchema sr subj a = do
-  mbSid <- sendSchema sr subj (schemaOf a)
+encodeWithSchema :: forall a m. (MonadIO m, ToAvro a)
+  => SchemaRegistry
+  -> Subject
+  -> Schema
+  -> a
+  -> m (Either EncodeError ByteString)
+encodeWithSchema sr subj sch a = do
+  mbSid <- sendSchema sr subj sch
   case mbSid of
     Left err  -> return . Left . EncodeRegistryError $ err
-    Right sid -> return . Right $ appendSchemaId sid (encode a)
+    Right sid -> return . Right $ appendSchemaId sid (A.encodeValueWithSchema sch a)
 
 
 appendSchemaId :: SchemaId -> ByteString -> ByteString
