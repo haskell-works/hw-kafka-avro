@@ -24,7 +24,7 @@ import           Control.Monad           (void)
 import           Control.Monad.IO.Class  (MonadIO, liftIO)
 import           Data.Aeson
 import           Data.Aeson.Types        (typeMismatch)
-import           Data.Avro.Schema        (Schema, Type (..), typeName)
+import           Data.Avro.Schema.Schema (Schema (..), typeName)
 import           Data.Bifunctor          (bimap)
 import           Data.Cache              as C
 import           Data.Hashable           (Hashable)

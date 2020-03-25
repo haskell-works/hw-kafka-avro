@@ -1,4 +1,4 @@
-cabal-version: 1.12
+cabal-version:  2.4
 
 name:           hw-kafka-avro
 version:        4.0.1
@@ -10,7 +10,7 @@ bug-reports:    https://github.com/haskell-works/hw-kafka-avro/issues
 author:         Alexey Raga
 maintainer:     alexey.raga@gmail.com
 copyright:      Alexey Raga
-license:        BSD3
+license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -34,7 +34,7 @@ library
   hs-source-dirs: src
   build-depends:
       aeson
-    , avro >=0.4
+    , avro >=0.5 && <0.6
     , base >=4.7 && <5
     , binary
     , bytestring
@@ -63,7 +63,7 @@ executable kafka-avro-example
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
-    , avro
+    , avro  >=0.5 && <0.6
     , base
     , binary
     , bytestring
@@ -92,7 +92,7 @@ test-suite kafka-avro-test
   build-depends:
       QuickCheck
     , aeson
-    , avro
+    , avro  >=0.5 && <0.6
     , base
     , binary
     , bytestring
