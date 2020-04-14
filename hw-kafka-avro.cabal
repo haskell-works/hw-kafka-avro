@@ -1,20 +1,20 @@
 cabal-version:  2.4
 
-name:           hw-kafka-avro
-version:        5.0.0
-synopsis:       Avro support for Kafka infrastructure
-description:    Avro support for Kafka infrastructure.
-category:       Services
-homepage:       https://github.com/haskell-works/hw-kafka-avro#readme
-bug-reports:    https://github.com/haskell-works/hw-kafka-avro/issues
-author:         Alexey Raga
-maintainer:     alexey.raga@gmail.com
-copyright:      Alexey Raga
-license:        BSD-3-Clause
-license-file:   LICENSE
-build-type:     Simple
-extra-source-files:
-    README.md
+name:                   hw-kafka-avro
+version:                5.0.0
+synopsis:               Avro support for Kafka infrastructure
+description:            Avro support for Kafka infrastructure.
+category:               Services
+homepage:               https://github.com/haskell-works/hw-kafka-avro#readme
+bug-reports:            https://github.com/haskell-works/hw-kafka-avro/issues
+author:                 Alexey Raga
+maintainer:             alexey.raga@gmail.com
+copyright:              Alexey Raga
+license:                BSD-3-Clause
+license-file:           LICENSE
+build-type:             Simple
+tested-with:            GHC == 8.10.1, GHC == 8.8.3, GHC == 8.6.5, GHC == 8.4.4
+extra-source-files:     README.md
 
 source-repository head
   type: git
