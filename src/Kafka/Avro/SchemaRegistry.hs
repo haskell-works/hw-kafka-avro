@@ -7,6 +7,7 @@
 
 module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
+, schemaRegistry_
 , loadSubjectSchema
 , getGlobalConfig, getSubjectConfig
 , getVersions, isCompatible
@@ -59,6 +60,7 @@ data SchemaRegistry = SchemaRegistry
   { srCache        :: Cache SchemaId Schema
   , srReverseCache :: Cache (Subject, SchemaName) SchemaId
   , srBaseUrl      :: String
+  , srAuth         :: Maybe Wreq.Auth
   }
 
 data SchemaRegistryError = SchemaRegistryConnectError String
@@ -68,11 +70,16 @@ data SchemaRegistryError = SchemaRegistryConnectError String
                          deriving (Show, Eq)
 
 schemaRegistry :: MonadIO m => String -> m SchemaRegistry
-schemaRegistry url = liftIO $
-  SchemaRegistry
-  <$> newCache Nothing
-  <*> newCache Nothing
-  <*> pure url
+schemaRegistry = schemaRegistry_ Nothing
+
+schemaRegistry_ :: MonadIO m => Maybe Wreq.Auth -> String -> m SchemaRegistry
+schemaRegistry_ auth url = liftIO $
+    SchemaRegistry
+    <$> newCache Nothing
+    <*> newCache Nothing
+    <*> pure url
+    <*> pure auth
+
 
 loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchema sr sid = do
@@ -80,13 +87,13 @@ loadSchema sr sid = do
   case sc of
     Just s  -> return (Right s)
     Nothing -> liftIO $ do
-      res <- getSchemaById (srBaseUrl sr) sid
+      res <- getSchemaById sr sid
       traverse ((\schema -> schema <$ cacheSchema sr sid schema) . unRegisteredSchema) res
 
 loadSubjectSchema :: MonadIO m => SchemaRegistry -> Subject -> Version -> m (Either SchemaRegistryError Schema)
 loadSubjectSchema sr (Subject sbj) (Version version) = do
     let url = (srBaseUrl sr) ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-    resp    <- liftIO $ Wreq.getWith wreqOpts url
+    resp    <- liftIO $ Wreq.getWith (wreqOpts sr) url
     wrapped <- pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
 
     schema   <- getData "schema" wrapped
@@ -115,7 +122,7 @@ sendSchema sr subj sc = do
   case sid of
     Just sid' -> return (Right sid')
     Nothing   -> do
-      res <- liftIO $ putSchema (srBaseUrl sr) subj (RegisteredSchema sc)
+      res <- liftIO $ putSchema sr subj (RegisteredSchema sc)
       void $ traverse (cacheId sr subj schemaName) res
       void $ traverse (\sid' -> cacheSchema sr sid' sc) res
       pure res
@@ -125,13 +132,13 @@ sendSchema sr subj sc = do
 getVersions :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError [Version])
 getVersions sr (Subject sbj) = do
   let url = (srBaseUrl sr) ++ "/subjects/" ++ unpack sbj ++ "/versions"
-  resp <- liftIO $ Wreq.getWith wreqOpts url
+  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (fmap Version . view Wreq.responseBody) (Wreq.asJSON resp)
 
 isCompatible :: MonadIO m => SchemaRegistry -> Subject -> Version -> Schema -> m (Either SchemaRegistryError Bool)
 isCompatible sr (Subject sbj) (Version version) schema = do
   let url  = (srBaseUrl sr) ++ "/compatibility/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-  resp     <- liftIO $ Wreq.postWith wreqOpts url (toJSON $ RegisteredSchema schema)
+  resp     <- liftIO $ Wreq.postWith (wreqOpts sr) url (toJSON $ RegisteredSchema schema)
   wrapped  <- pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
   either (return . Left) getCompatibility wrapped
   where
@@ -149,38 +156,45 @@ isCompatible sr (Subject sbj) (Version version) schema = do
 getGlobalConfig :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError Compatibility)
 getGlobalConfig sr = do
   let url = (srBaseUrl sr) ++ "/config"
-  resp <- liftIO $ Wreq.getWith wreqOpts url
+  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjectConfig :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError Compatibility)
 getSubjectConfig sr (Subject sbj) = do
   let url = (srBaseUrl sr) ++ "/config/" ++ unpack sbj
-  resp <- liftIO $ Wreq.getWith wreqOpts url
+  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjects :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError [Subject])
 getSubjects sr = do
   let url = (srBaseUrl sr) ++ "/subjects"
-  resp <- liftIO $ Wreq.getWith wreqOpts url
+  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (fmap Subject . view Wreq.responseBody) (Wreq.asJSON resp)
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
 
-wreqOpts :: Wreq.Options
-wreqOpts =
-  let accept = ["application/vnd.schemaregistry.v1+json", "application/vnd.schemaregistry+json", "application/json"]
-  in Wreq.defaults & Wreq.header "Accept" .~ accept
+wreqOpts :: SchemaRegistry -> Wreq.Options
+wreqOpts sr =
+  let
+    accept       = ["application/vnd.schemaregistry.v1+json", "application/vnd.schemaregistry+json", "application/json"]
+    acceptHeader = Wreq.header "Accept" .~ accept
+    authHeader   = Wreq.auth .~ srAuth sr
+  in Wreq.defaults & acceptHeader & authHeader
 
-getSchemaById :: String -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
-getSchemaById baseUrl sid@(SchemaId i) = do
-  let schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
-  resp <- Wreq.getWith wreqOpts schemaUrl
+getSchemaById :: SchemaRegistry -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
+getSchemaById sr sid@(SchemaId i) = do
+  let
+    baseUrl   = srBaseUrl sr
+    schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
+  resp <- Wreq.getWith (wreqOpts sr) schemaUrl
   pure $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
 
-putSchema :: String -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
-putSchema baseUrl (Subject sbj) schema = do
-  let schemaUrl = baseUrl ++ "/subjects/" ++ unpack sbj ++ "/versions"
-  resp <- Wreq.postWith wreqOpts schemaUrl (toJSON schema)
+putSchema :: SchemaRegistry -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
+putSchema sr (Subject sbj) schema = do
+  let
+    baseUrl   = srBaseUrl sr
+    schemaUrl = baseUrl ++ "/subjects/" ++ unpack sbj ++ "/versions"
+  resp <- Wreq.postWith (wreqOpts sr) schemaUrl (toJSON schema)
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 fromHttpError :: HttpException -> (HttpExceptionContent -> SchemaRegistryError) -> SchemaRegistryError
