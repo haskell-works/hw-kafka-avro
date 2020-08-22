@@ -13,7 +13,7 @@ copyright:              Alexey Raga
 license:                BSD-3-Clause
 license-file:           LICENSE
 build-type:             Simple
-tested-with:            GHC == 8.10.1, GHC == 8.8.3, GHC == 8.6.5, GHC == 8.4.4
+tested-with:            GHC == 8.10.2, GHC == 8.8.3, GHC == 8.6.5, GHC == 8.4.4
 extra-source-files:     README.md
 
 source-repository head
