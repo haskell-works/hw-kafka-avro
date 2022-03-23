@@ -20,9 +20,11 @@ module Kafka.Avro.SchemaRegistry
 
 import           Control.Arrow           (first)
 import           Control.Exception       (throwIO)
+import           Control.Exception.Safe (try)
 import           Control.Lens            (view, (&), (.~), (^.))
 import           Control.Monad           (void)
 import           Control.Monad.IO.Class  (MonadIO, liftIO)
+import           Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, withExceptT)
 import           Data.Aeson
 import           Data.Aeson.Types        (typeMismatch)
 import           Data.Avro.Schema.Schema (Schema (..), typeName)
@@ -182,20 +184,20 @@ wreqOpts sr =
   in Wreq.defaults & acceptHeader & authHeader
 
 getSchemaById :: SchemaRegistry -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
-getSchemaById sr sid@(SchemaId i) = do
+getSchemaById sr sid@(SchemaId i) = runExceptT $ do
   let
     baseUrl   = srBaseUrl sr
     schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
-  resp <- Wreq.getWith (wreqOpts sr) schemaUrl
-  pure $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
+  resp <- withExceptT wrapError . ExceptT . try $ Wreq.getWith (wreqOpts sr) schemaUrl
+  except $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
 
 putSchema :: SchemaRegistry -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
-putSchema sr (Subject sbj) schema = do
+putSchema sr (Subject sbj) schema = runExceptT $ do
   let
     baseUrl   = srBaseUrl sr
     schemaUrl = baseUrl ++ "/subjects/" ++ unpack sbj ++ "/versions"
-  resp <- Wreq.postWith (wreqOpts sr) schemaUrl (toJSON schema)
-  pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
+  resp <- withExceptT wrapError . ExceptT . try $ Wreq.postWith (wreqOpts sr) schemaUrl (toJSON schema)
+  except $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 fromHttpError :: HttpException -> (HttpExceptionContent -> SchemaRegistryError) -> SchemaRegistryError
 fromHttpError err f = case err of
