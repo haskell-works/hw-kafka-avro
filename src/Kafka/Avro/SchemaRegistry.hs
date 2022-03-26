@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
@@ -27,7 +26,11 @@ import           Control.Monad.IO.Class  (MonadIO, liftIO)
 import           Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, withExceptT)
 import           Data.Aeson
 import           Data.Aeson.Types        (typeMismatch)
+import qualified Data.Aeson.Key          as A
+import qualified Data.Aeson.KeyMap       as KM
 import           Data.Avro.Schema.Schema (Schema (..), typeName)
+import           Data.Foldable           (traverse_)
+import           Data.Functor            (($>))
 import           Data.Bifunctor          (bimap)
 import           Data.Cache              as C
 import           Data.Hashable           (Hashable)
@@ -94,16 +97,16 @@ loadSchema sr sid = do
 
 loadSubjectSchema :: MonadIO m => SchemaRegistry -> Subject -> Version -> m (Either SchemaRegistryError Schema)
 loadSubjectSchema sr (Subject sbj) (Version version) = do
-    let url = (srBaseUrl sr) ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-    resp    <- liftIO $ Wreq.getWith (wreqOpts sr) url
-    wrapped <- pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+    let url     = srBaseUrl sr ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
+    resp        <- liftIO $ Wreq.getWith (wreqOpts sr) url
+    let wrapped = bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
 
     schema   <- getData "schema" wrapped
     schemaId <- getData "id" wrapped
 
     case (,) <$> schema <*> schemaId of
       Left err                                    -> return $ Left err
-      Right ((RegisteredSchema schema), schemaId) -> cacheSchema sr schemaId schema *> (return $ Right schema)
+      Right (RegisteredSchema schema, schemaId) -> cacheSchema sr schemaId schema $> Right schema
   where
     getData :: (MonadIO m, FromJSON a) => String -> Either e Value -> m (Either e a)
     getData key = either (pure . Left) (viewData key)
@@ -125,30 +128,30 @@ sendSchema sr subj sc = do
     Just sid' -> return (Right sid')
     Nothing   -> do
       res <- liftIO $ putSchema sr subj (RegisteredSchema sc)
-      void $ traverse (cacheId sr subj schemaName) res
-      void $ traverse (\sid' -> cacheSchema sr sid' sc) res
+      traverse_ (cacheId sr subj schemaName) res
+      traverse_ (\sid' -> cacheSchema sr sid' sc) res
       pure res
   where
     schemaName = fullTypeName sc
 
 getVersions :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError [Version])
 getVersions sr (Subject sbj) = do
-  let url = (srBaseUrl sr) ++ "/subjects/" ++ unpack sbj ++ "/versions"
+  let url = srBaseUrl sr ++ "/subjects/" ++ unpack sbj ++ "/versions"
   resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (fmap Version . view Wreq.responseBody) (Wreq.asJSON resp)
 
 isCompatible :: MonadIO m => SchemaRegistry -> Subject -> Version -> Schema -> m (Either SchemaRegistryError Bool)
 isCompatible sr (Subject sbj) (Version version) schema = do
-  let url  = (srBaseUrl sr) ++ "/compatibility/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-  resp     <- liftIO $ Wreq.postWith (wreqOpts sr) url (toJSON $ RegisteredSchema schema)
-  wrapped  <- pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+  let url     =  srBaseUrl sr ++ "/compatibility/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
+  resp        <- liftIO $ Wreq.postWith (wreqOpts sr) url (toJSON $ RegisteredSchema schema)
+  let wrapped =  bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
   either (return . Left) getCompatibility wrapped
   where
     getCompatibility :: MonadIO m => Value -> m (Either e Bool)
     getCompatibility = liftIO . maybe (throwIO $ Wreq.JSONError "Missing key 'is_compatible' in Schema Registry response") (return . return) . viewCompatibility
 
     viewCompatibility :: Value -> Maybe Bool
-    viewCompatibility (Object obj) = HM.lookup "is_compatible" obj >>= toBool
+    viewCompatibility (Object obj) = KM.lookup "is_compatible" obj >>= toBool
     viewCompatibility _            = Nothing
 
     toBool :: Value -> Maybe Bool
@@ -157,19 +160,19 @@ isCompatible sr (Subject sbj) (Version version) schema = do
 
 getGlobalConfig :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError Compatibility)
 getGlobalConfig sr = do
-  let url = (srBaseUrl sr) ++ "/config"
+  let url = srBaseUrl sr ++ "/config"
   resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjectConfig :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError Compatibility)
 getSubjectConfig sr (Subject sbj) = do
-  let url = (srBaseUrl sr) ++ "/config/" ++ unpack sbj
+  let url = srBaseUrl sr ++ "/config/" ++ unpack sbj
   resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjects :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError [Subject])
 getSubjects sr = do
-  let url = (srBaseUrl sr) ++ "/subjects"
+  let url = srBaseUrl sr ++ "/subjects"
   resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
   pure $ bimap wrapError (fmap Subject . view Wreq.responseBody) (Wreq.asJSON resp)
 
@@ -208,9 +211,9 @@ fromHttpError err f = case err of
   HttpExceptionRequest _ ConnectionClosed           -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ (InvalidDestinationHost _) -> SchemaRegistryConnectError (displayException err)
   HttpExceptionRequest _ TlsNotSupported            -> SchemaRegistryConnectError (displayException err)
-#if MIN_VERSION_http_client(0,5,7)
+
   HttpExceptionRequest _ (InvalidProxySettings _)   -> SchemaRegistryConnectError (displayException err)
-#endif
+
   HttpExceptionRequest _ err'                       -> f err'
 
 wrapError :: SomeException -> SchemaRegistryError
@@ -263,3 +266,16 @@ instance FromJSON Compatibility where
       "FORWARD"  -> return $ ForwardCompatibility
       "BACKWARD" -> return $ BackwardCompatibility
       _          -> typeMismatch "Compatibility" compatibility
+
+
+
+
+
+
+
+
+
+
+
+
+
