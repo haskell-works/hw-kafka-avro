@@ -43,7 +43,8 @@ import qualified Data.Text.Lazy.Encoding as LText
 import           Data.Word               (Word32)
 import           GHC.Exception           (SomeException, displayException, fromException)
 import           GHC.Generics            (Generic)
-import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager)
+import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager, responseStatus)
+import           Network.HTTP.Types.Status (notFound404)
 import qualified Network.Wreq            as Wreq
 
 newtype SchemaId = SchemaId { unSchemaId :: Int32} deriving (Eq, Ord, Show, Hashable)
@@ -191,7 +192,7 @@ getSchemaById sr sid@(SchemaId i) = runExceptT $ do
   let
     baseUrl   = srBaseUrl sr
     schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
-  resp <- withExceptT wrapError . ExceptT . try $ Wreq.getWith (wreqOpts sr) schemaUrl
+  resp <- withExceptT (wrapErrorWithSchemaId sid) . ExceptT . try $ Wreq.getWith (wreqOpts sr) schemaUrl
   except $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
 
 putSchema :: SchemaRegistry -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
@@ -220,6 +221,11 @@ wrapError :: SomeException -> SchemaRegistryError
 wrapError someErr = case fromException someErr of
   Nothing      -> SchemaRegistrySendError (displayException someErr)
   Just httpErr -> fromHttpError httpErr (\_ -> SchemaRegistrySendError (displayException someErr))
+
+wrapErrorWithSchemaId :: SchemaId -> SomeException -> SchemaRegistryError
+wrapErrorWithSchemaId schemaId exception = case fromException exception of
+  Just (HttpExceptionRequest _ (StatusCodeException response _)) | responseStatus response == notFound404 -> SchemaRegistrySchemaNotFound schemaId
+  _ -> wrapError exception
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName
