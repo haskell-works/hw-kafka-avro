@@ -18,8 +18,8 @@ module Kafka.Avro.SchemaRegistry
 ) where
 
 import           Control.Arrow           (first)
-import           Control.Exception       (throwIO)
-import           Control.Exception.Safe (try)
+import           Control.Exception       (throwIO, SomeException (SomeException))
+import           Control.Exception.Safe (try, MonadCatch)
 import           Control.Lens            (view, (&), (.~), (^.))
 import           Control.Monad           (void)
 import           Control.Monad.IO.Class  (MonadIO, liftIO)
@@ -72,6 +72,8 @@ data SchemaRegistry = SchemaRegistry
 data SchemaRegistryError = SchemaRegistryConnectError String
                          | SchemaRegistryLoadError SchemaId
                          | SchemaRegistrySchemaNotFound SchemaId
+                         | SchemaRegistrySubjectNotFound Subject
+                         | SchemaRegistryUrlNotFound String
                          | SchemaRegistrySendError String
                          deriving (Show, Eq)
 
@@ -98,17 +100,21 @@ loadSchema sr sid = do
 
 loadSubjectSchema :: MonadIO m => SchemaRegistry -> Subject -> Version -> m (Either SchemaRegistryError Schema)
 loadSubjectSchema sr (Subject sbj) (Version version) = do
-    let url     = srBaseUrl sr ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-    resp        <- liftIO $ Wreq.getWith (wreqOpts sr) url
-    let wrapped = bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+    let url = srBaseUrl sr ++ "/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
+    respE   <- liftIO . try $ Wreq.getWith (wreqOpts sr) url
+    case respE of
+      Left exc -> pure . Left $ wrapErrorWithUrl url exc
+      Right resp -> do
 
-    schema   <- getData "schema" wrapped
-    schemaId <- getData "id" wrapped
+        let wrapped = bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+        schema   <- getData "schema" wrapped
+        schemaId <- getData "id" wrapped
 
-    case (,) <$> schema <*> schemaId of
-      Left err                                    -> return $ Left err
-      Right (RegisteredSchema schema, schemaId) -> cacheSchema sr schemaId schema $> Right schema
+        case (,) <$> schema <*> schemaId of
+          Left err                                    -> return $ Left err
+          Right (RegisteredSchema schema, schemaId) -> cacheSchema sr schemaId schema $> Right schema
   where
+
     getData :: (MonadIO m, FromJSON a) => String -> Either e Value -> m (Either e a)
     getData key = either (pure . Left) (viewData key)
 
@@ -121,6 +127,7 @@ loadSubjectSchema sr (Subject sbj) (Version version) = do
     toData value = case fromJSON value of
                      Success a -> Right a
                      Error e   -> Left e
+
 
 sendSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchema sr subj sc = do
@@ -136,17 +143,20 @@ sendSchema sr subj sc = do
     schemaName = fullTypeName sc
 
 getVersions :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError [Version])
-getVersions sr (Subject sbj) = do
+getVersions sr subj@(Subject sbj) = liftIO . runExceptT $ do
   let url = srBaseUrl sr ++ "/subjects/" ++ unpack sbj ++ "/versions"
-  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
-  pure $ bimap wrapError (fmap Version . view Wreq.responseBody) (Wreq.asJSON resp)
+  resp <- tryWith (wrapErrorWithSubject subj) $ Wreq.getWith (wreqOpts sr) url
+  except $ bimap wrapError (fmap Version . view Wreq.responseBody) (Wreq.asJSON resp)
 
 isCompatible :: MonadIO m => SchemaRegistry -> Subject -> Version -> Schema -> m (Either SchemaRegistryError Bool)
 isCompatible sr (Subject sbj) (Version version) schema = do
   let url     =  srBaseUrl sr ++ "/compatibility/subjects/" ++ unpack sbj ++ "/versions/" ++ show version
-  resp        <- liftIO $ Wreq.postWith (wreqOpts sr) url (toJSON $ RegisteredSchema schema)
-  let wrapped =  bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
-  either (return . Left) getCompatibility wrapped
+  respE        <- liftIO . try $ Wreq.postWith (wreqOpts sr) url (toJSON $ RegisteredSchema schema)
+  case respE of
+    Left exc -> pure . Left $ wrapErrorWithUrl url exc
+    Right resp -> do
+      let wrapped =  bimap wrapError (view Wreq.responseBody) (Wreq.asValue resp)
+      either (return . Left) getCompatibility wrapped
   where
     getCompatibility :: MonadIO m => Value -> m (Either e Bool)
     getCompatibility = liftIO . maybe (throwIO $ Wreq.JSONError "Missing key 'is_compatible' in Schema Registry response") (return . return) . viewCompatibility
@@ -162,20 +172,22 @@ isCompatible sr (Subject sbj) (Version version) schema = do
 getGlobalConfig :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError Compatibility)
 getGlobalConfig sr = do
   let url = srBaseUrl sr ++ "/config"
-  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
-  pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
+  respE <- liftIO . try $ Wreq.getWith (wreqOpts sr) url
+  pure $ case respE of
+    Left exc -> Left $ wrapError exc
+    Right resp -> bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjectConfig :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError Compatibility)
-getSubjectConfig sr (Subject sbj) = do
+getSubjectConfig sr subj@(Subject sbj) = liftIO . runExceptT $ do
   let url = srBaseUrl sr ++ "/config/" ++ unpack sbj
-  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
-  pure $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
+  resp <- tryWith (wrapErrorWithSubject subj) $ Wreq.getWith (wreqOpts sr) url
+  except $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjects :: MonadIO m => SchemaRegistry -> m (Either SchemaRegistryError [Subject])
-getSubjects sr = do
+getSubjects sr = liftIO . runExceptT $ do
   let url = srBaseUrl sr ++ "/subjects"
-  resp <- liftIO $ Wreq.getWith (wreqOpts sr) url
-  pure $ bimap wrapError (fmap Subject . view Wreq.responseBody) (Wreq.asJSON resp)
+  resp <- tryWith wrapError $ Wreq.getWith (wreqOpts sr) url
+  except $ bimap wrapError (fmap Subject . view Wreq.responseBody) (Wreq.asJSON resp)
 
 ------------------ PRIVATE: HELPERS --------------------------------------------
 
@@ -192,15 +204,15 @@ getSchemaById sr sid@(SchemaId i) = runExceptT $ do
   let
     baseUrl   = srBaseUrl sr
     schemaUrl = baseUrl ++ "/schemas/ids/" ++ show i
-  resp <- withExceptT (wrapErrorWithSchemaId sid) . ExceptT . try $ Wreq.getWith (wreqOpts sr) schemaUrl
+  resp <- tryWith (wrapErrorWithSchemaId sid) $ Wreq.getWith (wreqOpts sr) schemaUrl
   except $ bimap (const (SchemaRegistryLoadError sid)) (view Wreq.responseBody) (Wreq.asJSON resp)
 
 putSchema :: SchemaRegistry -> Subject -> RegisteredSchema -> IO (Either SchemaRegistryError SchemaId)
-putSchema sr (Subject sbj) schema = runExceptT $ do
+putSchema sr subj@(Subject sbj) schema = runExceptT $ do
   let
     baseUrl   = srBaseUrl sr
     schemaUrl = baseUrl ++ "/subjects/" ++ unpack sbj ++ "/versions"
-  resp <- withExceptT wrapError . ExceptT . try $ Wreq.postWith (wreqOpts sr) schemaUrl (toJSON schema)
+  resp <- tryWith (wrapErrorWithSubject subj) $ Wreq.postWith (wreqOpts sr) schemaUrl (toJSON schema)
   except $ bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 fromHttpError :: HttpException -> (HttpExceptionContent -> SchemaRegistryError) -> SchemaRegistryError
@@ -223,9 +235,21 @@ wrapError someErr = case fromException someErr of
   Just httpErr -> fromHttpError httpErr (\_ -> SchemaRegistrySendError (displayException someErr))
 
 wrapErrorWithSchemaId :: SchemaId -> SomeException -> SchemaRegistryError
-wrapErrorWithSchemaId schemaId exception = case fromException exception of
-  Just (HttpExceptionRequest _ (StatusCodeException response _)) | responseStatus response == notFound404 -> SchemaRegistrySchemaNotFound schemaId
+wrapErrorWithSchemaId = wrapErrorWith SchemaRegistrySchemaNotFound
+
+wrapErrorWithSubject :: Subject -> SomeException -> SchemaRegistryError
+wrapErrorWithSubject = wrapErrorWith SchemaRegistrySubjectNotFound
+
+wrapErrorWithUrl :: String -> SomeException -> SchemaRegistryError
+wrapErrorWithUrl = wrapErrorWith SchemaRegistryUrlNotFound
+
+wrapErrorWith :: (a -> SchemaRegistryError) -> a -> SomeException -> SchemaRegistryError
+wrapErrorWith mkError x exception = case fromException exception of
+  Just (HttpExceptionRequest _ (StatusCodeException response _)) | responseStatus response == notFound404 -> mkError x
   _ -> wrapError exception
+
+tryWith :: MonadCatch m => (SomeException -> e) -> m a -> ExceptT e m a
+tryWith wrapException = withExceptT wrapException . ExceptT . try 
 
 ---------------------------------------------------------------------
 fullTypeName :: Schema -> SchemaName
