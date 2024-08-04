@@ -19,9 +19,9 @@ jobs:
       matrix:
         ghc: ["9.10.1", "9.8.2", "9.6.6"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        exclude:
-          - ghc: "9.4.2"
-            os: windows-latest
+        # exclude:
+        #   - ghc: "9.4.2"
+        #     os: windows-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -30,7 +30,7 @@ jobs:
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: 3.6.2.0
+          cabal-version: 3.12.1.0
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
