@@ -1,7 +1,7 @@
 cabal-version:  2.4
 
 name:                   hw-kafka-avro
-version:                6.0.0
+version:                6.0.1
 synopsis:               Avro support for Kafka infrastructure
 description:            Avro support for Kafka infrastructure.
 category:               Services
@@ -13,7 +13,7 @@ copyright:              Alexey Raga
 license:                BSD-3-Clause
 license-file:           LICENSE
 build-type:             Simple
-tested-with:            GHC == 9.2.2, GHC == 9.0.2, GHC == 8.10.7, GHC == 8.8.4, GHC == 8.6.5
+tested-with:            GHC == 9.10.1, GHC == 9.8.2, GHC == 9.6.6
 extra-source-files:     README.md
 
 source-repository head
