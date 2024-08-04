@@ -60,3 +60,5 @@ tramp
 # elpa packages
 /elpa/
 TAGS
+
+.direnv/
