@@ -19,9 +19,10 @@ jobs:
       matrix:
         ghc: ["9.10.1", "9.8.2", "9.6.6"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        # exclude:
-        #   - ghc: "9.4.2"
-        #     os: windows-latest
+
+    env:
+      # Modify this value to "invalidate" the cabal cache.
+      CABAL_CACHE_VERSION: "avro/2024-08-05"
 
     steps:
       - uses: actions/checkout@v2
@@ -30,7 +31,7 @@ jobs:
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: 3.12.1.0
+          cabal-version: 3.10.3.0
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
@@ -51,7 +52,7 @@ jobs:
           dist-dir: dist-newstyle
           store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
           threads: 16
-          archive-uri: ${{ secrets.BINARY_CACHE_URI }}/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}/${{ matrix.cabal }}/${{ matrix.ghc }}
+          archive-uri: ${{ secrets.BINARY_CACHE_URI }}/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}
           skip: "${{ secrets.BINARY_CACHE_URI == '' }}"
 
       - name: Cabal cache over HTTPS
@@ -60,7 +61,7 @@ jobs:
           dist-dir: dist-newstyle
           store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
           threads: 16
-          archive-uri: https://cache.haskellworks.io/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}/${{ matrix.cabal }}/${{ matrix.ghc }}
+          archive-uri: https://cache.haskellworks.io/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}
           skip: "${{ secrets.BINARY_CACHE_URI != '' }}"
 
       - name: Build
@@ -122,6 +123,7 @@ jobs:
             cd $PROJECT_DIR && cd `dirname $i`
             cabal v2-sdist -o $PROJECT_DIR/build/sdist
           done;
+
       - name: Publish to hackage
         env:
           server: http://hackage.haskell.org
@@ -129,7 +131,6 @@ jobs:
           password: ${{ secrets.HACKAGE_PASS }}
           candidate: false
         run: |
-          package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
           for PACKAGE_TARBALL in $(find ./build/sdist/ -name "*.tar.gz"); do
             PACKAGE_NAME=$(basename ${PACKAGE_TARBALL%.*.*})
             if ${{ env.candidate }}; then
@@ -149,6 +150,14 @@ jobs:
             fi
           done
 
+      - name: "Build Changelog"
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          toTag: "{{ github.ref }}"
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -157,6 +166,6 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ needs.check.outputs.tag }}
-          body: Undocumented
+          body: ${{ steps.build_changelog.outputs.changelog }}
           draft: false
           prerelease: false
