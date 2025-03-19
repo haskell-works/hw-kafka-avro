@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
@@ -12,42 +13,49 @@ module Kafka.Avro.SchemaRegistry
 , getGlobalConfig, getSubjectConfig
 , getVersions, isCompatible
 , getSubjects
+, defaultSchemaRegistryConfig
+, cfgAuth
+, cfgHeaders
+, cfgAutoRegisterSchemas
 , SchemaId(..), Subject(..)
+, SchemaRegistryConfig
 , SchemaRegistry, SchemaRegistryError(..)
 , Schema(..)
 , Compatibility(..), Version(..)
 ) where
 
-import           Control.Arrow           (first)
-import           Control.Exception       (throwIO, SomeException (SomeException))
-import           Control.Exception.Safe (try, MonadCatch)
-import           Control.Lens            (view, (&), (.~), (^.), (%~))
-import           Control.Monad           (void)
-import           Control.Monad.IO.Class  (MonadIO, liftIO)
+import           Control.Arrow              (first)
+import           Control.Exception          (SomeException (SomeException), throwIO)
+import           Control.Exception.Safe     (MonadCatch, try)
+import           Control.Lens               (view, (%~), (&), (.~), (^.))
+import           Control.Monad              (void)
+import           Control.Monad.Except       (liftEither)
+import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, withExceptT)
 import           Data.Aeson
-import           Data.Aeson.Types        (typeMismatch)
-import qualified Data.Aeson.Key          as A
-import qualified Data.Aeson.KeyMap       as KM
-import           Data.Avro.Schema.Schema (Schema (..), typeName)
-import           Data.Foldable           (traverse_)
-import           Data.Functor            (($>))
-import           Data.Bifunctor          (bimap)
-import           Data.Cache              as C
-import           Data.Hashable           (Hashable)
-import qualified Data.HashMap.Lazy       as HM
-import           Data.Int                (Int32)
-import           Data.String             (IsString)
-import           Data.Text               (Text, append, cons, unpack)
-import qualified Data.Text.Encoding      as Text
-import qualified Data.Text.Lazy.Encoding as LText
-import           Data.Word               (Word32)
-import           GHC.Exception           (SomeException, displayException, fromException)
-import           GHC.Generics            (Generic)
-import           Network.HTTP.Client     (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager, responseStatus)
-import           Network.HTTP.Types.Header (Header)
-import           Network.HTTP.Types.Status (notFound404)
-import qualified Network.Wreq            as Wreq
+import qualified Data.Aeson.Key             as A
+import qualified Data.Aeson.KeyMap          as KM
+import           Data.Aeson.Types           (typeMismatch)
+import           Data.Avro.Schema.Schema    (Schema (..), typeName)
+import           Data.Bifunctor             (bimap)
+import           Data.Cache                 as C
+import           Data.Foldable              (traverse_)
+import           Data.Functor               (($>))
+import           Data.Hashable              (Hashable)
+import qualified Data.HashMap.Lazy          as HM
+import           Data.Int                   (Int32)
+import           Data.List                  (find)
+import           Data.String                (IsString)
+import           Data.Text                  (Text, append, cons, unpack)
+import qualified Data.Text.Encoding         as Text
+import qualified Data.Text.Lazy.Encoding    as LText
+import           Data.Word                  (Word32)
+import           GHC.Exception              (SomeException, displayException, fromException)
+import           GHC.Generics               (Generic)
+import           Network.HTTP.Client        (HttpException (..), HttpExceptionContent (..), Manager, defaultManagerSettings, newManager, responseStatus)
+import           Network.HTTP.Types.Header  (Header)
+import           Network.HTTP.Types.Status  (notFound404)
+import qualified Network.Wreq               as Wreq
 
 newtype SchemaId = SchemaId { unSchemaId :: Int32} deriving (Eq, Ord, Show, Hashable)
 newtype SchemaName = SchemaName Text deriving (Eq, Ord, IsString, Show, Hashable)
@@ -64,21 +72,35 @@ data Compatibility = NoCompatibility
                    | BackwardCompatibility
                    deriving (Eq, Show, Ord)
 
+data SchemaRegistryConfig = SchemaRegistryConfig
+  { cAuth                :: Maybe Wreq.Auth
+  , cExtraHeaders        :: [Header]
+  , cAutoRegisterSchemas :: Bool
+  }
+
 data SchemaRegistry = SchemaRegistry
   { srCache        :: Cache SchemaId Schema
   , srReverseCache :: Cache (Subject, SchemaName) SchemaId
   , srBaseUrl      :: String
-  , srAuth         :: Maybe Wreq.Auth
-  , srExtraHeaders :: [Header]
+  , srConfig       :: SchemaRegistryConfig
   }
 
 data SchemaRegistryError = SchemaRegistryConnectError String
                          | SchemaRegistryLoadError SchemaId
                          | SchemaRegistrySchemaNotFound SchemaId
                          | SchemaRegistrySubjectNotFound Subject
+                         | SchemaRegistryNoCompatibleSchemaFound Schema
                          | SchemaRegistryUrlNotFound String
                          | SchemaRegistrySendError String
+                         | SchemaRegistryCacheError
                          deriving (Show, Eq)
+
+defaultSchemaRegistryConfig :: SchemaRegistryConfig
+defaultSchemaRegistryConfig = SchemaRegistryConfig
+  { cAuth = Nothing
+  , cExtraHeaders = []
+  , cAutoRegisterSchemas = True
+  }
 
 schemaRegistry :: MonadIO m => String -> m SchemaRegistry
 schemaRegistry = schemaRegistry_ Nothing
@@ -87,13 +109,31 @@ schemaRegistry_ :: MonadIO m => Maybe Wreq.Auth -> String -> m SchemaRegistry
 schemaRegistry_ auth = schemaRegistryWithHeaders auth []
 
 schemaRegistryWithHeaders :: MonadIO m => Maybe Wreq.Auth -> [Header] -> String -> m SchemaRegistry
-schemaRegistryWithHeaders auth headers url = liftIO $
+schemaRegistryWithHeaders auth headers url
+  = schemaRegistryWithConfig url $ cfgAuth auth $ cfgHeaders headers defaultSchemaRegistryConfig
+
+schemaRegistryWithConfig :: MonadIO m => String -> SchemaRegistryConfig -> m SchemaRegistry
+schemaRegistryWithConfig url config = liftIO $
     SchemaRegistry
     <$> newCache Nothing
     <*> newCache Nothing
     <*> pure url
-    <*> pure auth
-    <*> pure headers
+    <*> pure config
+
+-- | Add authentication options
+cfgAuth :: Maybe Wreq.Auth -> SchemaRegistryConfig -> SchemaRegistryConfig
+cfgAuth auth config = config { cAuth = auth }
+
+-- | Add extra headers
+cfgHeaders :: [Header] -> SchemaRegistryConfig -> SchemaRegistryConfig
+cfgHeaders headers config = config { cExtraHeaders = headers }
+
+-- | Set whether to auto-publish schemas
+-- If set to 'False', encoding will fail if there is no compatible schema
+-- in the schema registy.
+-- This is equivalent to the confluent 'auto.register.schemas' option.
+cfgAutoRegisterSchemas :: Bool -> SchemaRegistryConfig -> SchemaRegistryConfig
+cfgAutoRegisterSchemas autoRegisterSchemas config = config { cAutoRegisterSchemas = autoRegisterSchemas }
 
 loadSchema :: MonadIO m => SchemaRegistry -> SchemaId -> m (Either SchemaRegistryError Schema)
 loadSchema sr sid = do
@@ -117,7 +157,7 @@ loadSubjectSchema sr (Subject sbj) (Version version) = do
         schemaId <- getData "id" wrapped
 
         case (,) <$> schema <*> schemaId of
-          Left err                                    -> return $ Left err
+          Left err                                  -> return $ Left err
           Right (RegisteredSchema schema, schemaId) -> cacheSchema sr schemaId schema $> Right schema
   where
 
@@ -135,18 +175,45 @@ loadSubjectSchema sr (Subject sbj) (Version version) = do
                      Error e   -> Left e
 
 
+-- | Get the schema ID.
+-- If the 'SchemaRegistry' is configured to auto-register schemas,
+-- this posts the schema to the schema registry server.
+-- Otherwise, this searches for a compatible schema and returns a 'SchemaRegistryNoCompatibleSchemaFound'
+-- if none is found.
 sendSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
 sendSchema sr subj sc = do
+  let schemaName = fullTypeName sc
   sid <- cachedId sr subj schemaName
   case sid of
     Just sid' -> return (Right sid')
-    Nothing   -> do
-      res <- liftIO $ putSchema sr subj (RegisteredSchema sc)
-      traverse_ (cacheId sr subj schemaName) res
-      traverse_ (\sid' -> cacheSchema sr sid' sc) res
-      pure res
-  where
-    schemaName = fullTypeName sc
+    Nothing -> if cAutoRegisterSchemas (srConfig sr)
+                then registerSchema sr subj sc
+                else getCompatibleSchema sr subj sc
+
+registerSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
+registerSchema sr subj sc = do
+  let schemaName = fullTypeName sc
+  res <- liftIO $ putSchema sr subj (RegisteredSchema sc)
+  traverse_ (cacheId sr subj schemaName) res
+  traverse_ (\sid' -> cacheSchema sr sid' sc) res
+  pure res
+
+getCompatibleSchema :: MonadIO m => SchemaRegistry -> Subject -> Schema -> m (Either SchemaRegistryError SchemaId)
+getCompatibleSchema sr subj sc = liftIO . runExceptT $ do
+  let schemaName = fullTypeName sc
+  versions <- liftEither =<< getVersions sr subj
+  compatibilites <- liftEither . sequenceA 
+                 =<< traverse (\ver -> fmap (,ver) <$> isCompatible sr subj ver sc) versions
+  let mCompatibleVersion = snd <$> find fst compatibilites
+  compatibleVersion <- liftEither 
+                      $ case mCompatibleVersion of
+                          Just version -> Right version
+                          Nothing -> Left $ SchemaRegistryNoCompatibleSchemaFound sc
+  _ <- liftEither =<< loadSubjectSchema sr subj compatibleVersion -- caches the schema ID
+  mSid <- cachedId sr subj schemaName
+  liftEither $ case mSid of
+    Just sid' -> pure sid'
+    Nothing -> Left SchemaRegistryCacheError
 
 getVersions :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError [Version])
 getVersions sr subj@(Subject sbj) = liftIO . runExceptT $ do
@@ -180,7 +247,7 @@ getGlobalConfig sr = do
   let url = srBaseUrl sr ++ "/config"
   respE <- liftIO . try $ Wreq.getWith (wreqOpts sr) url
   pure $ case respE of
-    Left exc -> Left $ wrapError exc
+    Left exc   -> Left $ wrapError exc
     Right resp -> bimap wrapError (view Wreq.responseBody) (Wreq.asJSON resp)
 
 getSubjectConfig :: MonadIO m => SchemaRegistry -> Subject -> m (Either SchemaRegistryError Compatibility)
@@ -202,8 +269,8 @@ wreqOpts sr =
   let
     accept       = ["application/vnd.schemaregistry.v1+json", "application/vnd.schemaregistry+json", "application/json"]
     acceptHeader = Wreq.header "Accept" .~ accept
-    authHeader   = Wreq.auth .~ srAuth sr
-    extraHeaders = Wreq.headers %~ (++ srExtraHeaders sr)
+    authHeader   = Wreq.auth .~ cAuth (srConfig sr)
+    extraHeaders = Wreq.headers %~ (++ cExtraHeaders (srConfig sr))
   in Wreq.defaults & acceptHeader & authHeader & extraHeaders
 
 getSchemaById :: SchemaRegistry -> SchemaId -> IO (Either SchemaRegistryError RegisteredSchema)
