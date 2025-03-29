@@ -5,8 +5,9 @@ in
   pkgs.mkShell {
     buildInputs = with pkgs; [
       zlib
-      haskell.compiler.ghc910
+      haskell.compiler.ghc92
       cabal-install
+      haskell-language-server
     ];
 
     shellHook = ''
