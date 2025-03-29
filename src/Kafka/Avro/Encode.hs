@@ -36,9 +36,7 @@ valueSubject :: Subject -> Subject
 valueSubject (Subject subj) = Subject (subj <> "-value")
 {-# INLINE valueSubject #-}
 
--- | Encodes a provided value as a message key.
---
--- Registers the schema in SchemaRegistry with "<subject>-key" subject.
+-- | Encodes a provided value as a message key with "<subject>-key" subject.
 encodeKey :: (MonadIO m, HasAvroSchema a, ToAvro a)
   => SchemaRegistry
   -> Subject
@@ -47,9 +45,7 @@ encodeKey :: (MonadIO m, HasAvroSchema a, ToAvro a)
 encodeKey sr subj = encode sr (keySubject subj)
 {-# INLINE encodeKey #-}
 
--- | Encodes a provided value as a message key.
---
--- Registers the schema in SchemaRegistry with "<subject>-key" subject.
+-- | Encodes a provided value as a message key with "<subject>-key" subject.
 encodeKeyWithSchema :: (MonadIO m, ToAvro a)
   => SchemaRegistry
   -> Subject
@@ -59,9 +55,7 @@ encodeKeyWithSchema :: (MonadIO m, ToAvro a)
 encodeKeyWithSchema sr subj = encodeWithSchema sr (keySubject subj)
 {-# INLINE encodeKeyWithSchema #-}
 
--- | Encodes a provided value as a message value.
---
--- Registers the schema in SchemaRegistry with "<subject>-value" subject.
+-- | Encodes a provided value as a message value with "<subject>-value" subject.
 encodeValue :: (MonadIO m, HasAvroSchema a, ToAvro a)
   => SchemaRegistry
   -> Subject
@@ -70,9 +64,7 @@ encodeValue :: (MonadIO m, HasAvroSchema a, ToAvro a)
 encodeValue sr subj = encode sr (valueSubject subj)
 {-# INLINE encodeValue #-}
 
--- | Encodes a provided value as a message value.
---
--- Registers the schema in SchemaRegistry with "<subject>-value" subject.
+-- | Encodes a provided value as a message value with "<subject>-value" subject.
 encodeValueWithSchema :: (MonadIO m, ToAvro a)
   => SchemaRegistry
   -> Subject
@@ -91,7 +83,6 @@ encode sr subj a = encodeWithSchema sr subj (schemaOf a) a
 {-# INLINE encode #-}
 
 -- | Encodes a provided value into Avro
--- and registers value's schema in SchemaRegistry.
 encodeWithSchema :: forall a m. (MonadIO m, ToAvro a)
   => SchemaRegistry
   -> Subject
