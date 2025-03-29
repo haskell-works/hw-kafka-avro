@@ -20,6 +20,8 @@ jobs:
       has_new_tag: ${{ steps.tag.outputs.has_new_tag }}
 
     steps:
+      - uses: actions/checkout@v4
+      
       - name: Determine repository name
         id: repo
         run: |
