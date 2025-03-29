@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: haskell-actions/setup@v2.7.5
+      - uses: haskell/actions/setup@v2
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
@@ -41,33 +41,35 @@ jobs:
           cabal configure --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
           cabal build all --enable-tests --dry-run
 
-      - name: Cabal cache over S3
-        uses: action-works/cabal-cache-s3@v1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        with:
-          region: us-west-2
-          dist-dir: dist-newstyle
-          store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
-          threads: 16
-          archive-uri: ${{ secrets.BINARY_CACHE_URI }}/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}/${{ matrix.cabal }}/${{ matrix.ghc }}
-          skip: "${{ secrets.BINARY_CACHE_URI == '' }}"
+      - name: Record dependencies
+        run: |
+          cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[].id' | sort | uniq > dependencies.txt
+          date +"%Y-%m-%d" > date.txt
 
-      - name: Cabal cache over HTTPS
-        uses: action-works/cabal-cache-s3@v1
+      - name: Cache cabal store
+        uses: actions/cache/restore@v4
         with:
-          dist-dir: dist-newstyle
-          store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
-          threads: 16
-          archive-uri: https://cache.haskellworks.io/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}/${{ matrix.cabal }}/${{ matrix.ghc }}
-          skip: "${{ secrets.BINARY_CACHE_URI != '' }}"
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: |
+            cache-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+          restore-keys: |
+            cache-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+            cache-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
+            cache-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}
 
       - name: Build
         run: cabal build all --enable-tests --enable-benchmarks
 
       - name: Test
         run: cabal test all --enable-tests --enable-benchmarks
+
+      - name: Cache Cabal store
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: |
+            cache-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+    
 
   check:
     needs: build
@@ -86,6 +88,7 @@ jobs:
             cd $PROJECT_DIR && cd `dirname $i`
             cabal check
           done
+
       - name: Tag new version
         id: tag
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -104,6 +107,7 @@ jobs:
               echo "::set-output name=tag::v$package_version"
             fi
           fi
+
   release:
     needs: [build, check]
     runs-on: ubuntu-latest
@@ -122,6 +126,7 @@ jobs:
             cd $PROJECT_DIR && cd `dirname $i`
             cabal v2-sdist -o $PROJECT_DIR/build/sdist
           done;
+
       - name: Publish to hackage
         env:
           server: http://hackage.haskell.org
@@ -149,6 +154,14 @@ jobs:
             fi
           done
 
+      - name: "Build Changelog"
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          toTag: "{{ github.ref }}"
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -157,6 +170,6 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ needs.check.outputs.tag }}
-          body: Undocumented
+          body: ${{ steps.build_changelog.outputs.changelog }}
           draft: false
           prerelease: false
