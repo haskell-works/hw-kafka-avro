@@ -11,20 +11,45 @@ on:
   pull_request:
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      repository_name: ${{ steps.repo.outputs.repository_name }}
+      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
+      has_new_tag: ${{ steps.tag.outputs.has_new_tag }}
+
+    steps:
+      - name: Determine repository name
+        id: repo
+        run: |
+          echo "repository_name=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Determine package version
+        id: tag
+        run: |
+          package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
+          echo "Package version is v$package_version"
+          echo "version=$package_version" >> $GITHUB_OUTPUT
+          if ! git rev-parse "v$package_version" >/dev/null 2>&1; then
+            echo "New tag to be created"
+            echo "tag=v$package_version" >> $GITHUB_OUTPUT
+            echo "has_new_tag=true" >> $GITHUB_OUTPUT
+          fi
+
+          
   build:
     permissions:
       contents: write
 
     runs-on: ${{ matrix.os }}
+    needs: setup
 
     strategy:
       fail-fast: false
       matrix:
         ghc: ["9.10.1", "9.8.2", "9.6.6"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        # exclude:
-        #   - ghc: "9.4.2"
-        #     os: windows-latest
 
     steps:
       - uses: actions/checkout@v2
@@ -54,11 +79,11 @@ jobs:
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
           key: |
-            cache-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+            ${{ needs.setup.outputs.repository_name }}-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
           restore-keys: |
-            cache-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
-            cache-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
-            cache-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}
+            ${{ needs.setup.outputs.repository_name }}-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+            ${{ needs.setup.outputs.repository_name }}-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
+            ${{ needs.setup.outputs.repository_name }}-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}
 
       - name: Build
         run: cabal build all --enable-tests --enable-benchmarks
@@ -71,17 +96,12 @@ jobs:
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
           key: |
-            cache-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
+            ${{ needs.setup.outputs.repository_name }}-${{ vars.CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}-${{ hashFiles('date.txt') }}
     
 
   check:
-    needs: build
+    needs: [build, setup]
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.tag.outputs.version }}
-      tag: ${{ steps.tag.outputs.tag }}
-      has_new_tag: ${{ steps.tag.outputs.has_new_tag }}
-
     steps:
       - uses: actions/checkout@v2
 
@@ -94,22 +114,11 @@ jobs:
             cabal check
           done
 
-      - name: Determine package version
-        id: tag
-        run: |
-          package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
-          echo "Package version is v$package_version"
-          echo "version=$package_version" >> $GITHUB_OUTPUT
-          if ! git rev-parse "v$package_version" >/dev/null 2>&1; then
-            echo "New tag to be created"
-            echo "tag=v$package_version" >> $GITHUB_OUTPUT
-            echo "has_new_tag=true" >> $GITHUB_OUTPUT
-          fi
 
   release:
-    needs: [build, check]
+    needs: [build, setup]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && needs.check.outputs.has_new_tag == 'true'
+    if: github.ref == 'refs/heads/main' && needs.setup.outputs.has_new_tag == 'true'
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
 
@@ -168,7 +177,7 @@ jobs:
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: 'refs/tags/${{ needs.check.outputs.tag }}',
+              ref: 'refs/tags/${{ needs.setup.outputs.tag }}',
               sha: context.sha,
               force: true
             })
@@ -179,8 +188,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-          tag: ${{ steps.build_changelog.outputs.toTag }}
-          name: Release ${{ needs.check.outputs.tag }}
+          tag: ${{ needs.setup.outputs.tag }}
+          name: Release ${{ needs.setup.outputs.tag }}
           body: ${{ steps.build_changelog.outputs.changelog }}
           draft: false
           prerelease: false
