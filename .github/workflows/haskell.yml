@@ -21,7 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0
+
       - name: Determine repository name
         id: repo
         run: |
@@ -54,7 +56,7 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: haskell-actions/setup@v2.7.5
         id: setup-haskell
@@ -105,7 +107,7 @@ jobs:
     needs: [build, setup]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Check if cabal project is sane
         run: |
@@ -125,7 +127,7 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Create source distribution
         run: |
