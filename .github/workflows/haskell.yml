@@ -12,6 +12,9 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
+
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -75,7 +78,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.tag.outputs.version }}
       tag: ${{ steps.tag.outputs.tag }}
+      has_new_tag: ${{ steps.tag.outputs.has_new_tag }}
 
     steps:
       - uses: actions/checkout@v2
@@ -89,29 +94,22 @@ jobs:
             cabal check
           done
 
-      - name: Tag new version
+      - name: Determine package version
         id: tag
-        if: ${{ github.ref == 'refs/heads/main' }}
-        env:
-          server: http://hackage.haskell.org
-          username: ${{ secrets.HACKAGE_USER }}
-          password: ${{ secrets.HACKAGE_PASS }}
         run: |
           package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
           echo "Package version is v$package_version"
-          git fetch --unshallow origin
-          if git tag "v$package_version"; then
-            echo "Tagging with new version "v$package_version""
-            if git push origin "v$package_version"; then
-              echo "Tagged with new version "v$package_version""
-              echo "::set-output name=tag::v$package_version"
-            fi
+          echo "version=$package_version" >> $GITHUB_OUTPUT
+          if ! git rev-parse "v$package_version" >/dev/null 2>&1; then
+            echo "New tag to be created"
+            echo "tag=v$package_version" >> $GITHUB_OUTPUT
+            echo "has_new_tag=true" >> $GITHUB_OUTPUT
           fi
 
   release:
     needs: [build, check]
     runs-on: ubuntu-latest
-    if: ${{ needs.check.outputs.tag != '' }}
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.has_new_tag == 'true'
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
 
@@ -162,14 +160,27 @@ jobs:
         with:
           toTag: "{{ github.ref }}"
 
+      - name: Tag published version
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ needs.check.outputs.tag }}',
+              sha: context.sha,
+              force: true
+            })
+
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ needs.check.outputs.tag }}
+          tag: ${{ steps.build_changelog.outputs.toTag }}
+          name: Release ${{ needs.check.outputs.tag }}
           body: ${{ steps.build_changelog.outputs.changelog }}
           draft: false
           prerelease: false
