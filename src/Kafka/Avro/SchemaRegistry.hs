@@ -9,6 +9,7 @@ module Kafka.Avro.SchemaRegistry
 ( schemaRegistry, loadSchema, sendSchema
 , schemaRegistry_
 , schemaRegistryWithHeaders
+, schemaRegistryWithConfig
 , loadSubjectSchema
 , getGlobalConfig, getSubjectConfig
 , getVersions, isCompatible
